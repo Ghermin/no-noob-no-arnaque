@@ -3,7 +3,6 @@ import { computed, onMounted, ref } from 'vue';
 import { navigate, state } from '../store';
 import { db } from '../storage';
 import { compareScans } from '../analysis';
-import { describeDtc } from '../obd/dtc';
 import { formatDate } from '../format';
 import { SCAN_LABELS, type SavedScan } from '../types';
 import FindingList from '../components/FindingList.vue';
@@ -14,15 +13,21 @@ const vehicle = computed(() => state.vehicles.find((v) => v.id === props.vehicle
 const before = ref<SavedScan | null>(null);
 const after = ref<SavedScan | null>(null);
 const loaded = ref(false);
+const userCleared = ref(false);
 
 onMounted(async () => {
     const scans = await db.scans(props.vehicleId);
     before.value = scans.find((s) => s.id === props.beforeId) ?? null;
     after.value = scans.find((s) => s.id === props.afterId) ?? null;
+    if (before.value && after.value) {
+        const from = before.value.date;
+        const to = after.value.date;
+        userCleared.value = scans.some((s) => s.clearedByUser && s.date >= from && s.date < to);
+    }
     loaded.value = true;
 });
 
-const comparison = computed(() => (before.value && after.value ? compareScans(before.value, after.value) : null));
+const comparison = computed(() => (before.value && after.value ? compareScans(before.value, after.value, userCleared.value) : null));
 
 const rows = computed(() => {
     if (!before.value || !after.value) return [];
@@ -40,7 +45,17 @@ const rows = computed(() => {
             before: `${b.monitors.filter((m) => m.complete).length}/${b.monitors.length}`,
             after: `${a.monitors.filter((m) => m.complete).length}/${a.monitors.length}`
         },
-        { label: 'Compteur', before: before.value.odometer ?? '—', after: after.value.odometer ?? '—' }
+        { label: 'Compteur (saisie)', before: before.value.odometer ?? '—', after: after.value.odometer ?? '—' },
+        {
+            label: 'Kilométrage OBD',
+            before: b.odometerObd != null ? Math.round(b.odometerObd) : '—',
+            after: a.odometerObd != null ? Math.round(a.odometerObd) : '—'
+        },
+        {
+            label: 'Codes autres calculateurs',
+            before: b.full ? (b.modules ?? []).reduce((n, m) => n + m.dtcs.length, 0) : 'non lu',
+            after: a.full ? (a.modules ?? []).reduce((n, m) => n + m.dtcs.length, 0) : 'non lu'
+        }
     ];
 });
 
@@ -88,8 +103,8 @@ function printPage(): void {
             <div v-if="group.codes.length" class="card">
                 <h3>{{ group.title }}</h3>
                 <ul class="list">
-                    <li v-for="code in group.codes" :key="code">
-                        <span class="badge" :class="group.cls">{{ code }}</span> {{ describeDtc(code).description }}
+                    <li v-for="item in group.codes" :key="item.code">
+                        <span class="badge" :class="group.cls">{{ item.code }}</span> {{ item.description }}
                     </li>
                 </ul>
             </div>

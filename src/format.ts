@@ -26,8 +26,8 @@ export function vehicleSubtitle(vehicle: Vehicle): string {
     return [vehicle.make, vehicle.year, FUEL_LABELS[vehicle.fuel]].filter(Boolean).join(' · ');
 }
 
-export function worstSeverity(result: ScanResult): Severity {
-    return analyzeScan(result).reduce<Severity>((worst, f) => (SEVERITY_RANK[f.severity] > SEVERITY_RANK[worst] ? f.severity : worst), 'ok');
+export function worstSeverity(result: ScanResult, odometer: number | null = null): Severity {
+    return analyzeScan(result, odometer).reduce<Severity>((worst, f) => (SEVERITY_RANK[f.severity] > SEVERITY_RANK[worst] ? f.severity : worst), 'ok');
 }
 
 export function guessFuel(result: ScanResult): Fuel {

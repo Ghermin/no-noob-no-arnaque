@@ -2,17 +2,20 @@
 import { computed, onMounted, ref } from 'vue';
 import { navigate, state } from '../store';
 import { db } from '../storage';
-import { analyzeScan } from '../analysis';
+import { analyzeScan, clearedBetween } from '../analysis';
 import { formatDate, formatDuration, vehicleSubtitle } from '../format';
 import { SCAN_LABELS, type SavedScan } from '../types';
 import FindingList from '../components/FindingList.vue';
 import DtcList from '../components/DtcList.vue';
+import ModuleList from '../components/ModuleList.vue';
+import Mode06List from '../components/Mode06List.vue';
 
 const props = defineProps<{ vehicleId: string; scanId: string }>();
 
 const vehicle = computed(() => state.vehicles.find((v) => v.id === props.vehicleId));
 const scan = ref<SavedScan | null>(null);
 const previous = ref<SavedScan | null>(null);
+const userClear = ref<SavedScan | null>(null);
 const loaded = ref(false);
 
 onMounted(async () => {
@@ -20,15 +23,26 @@ onMounted(async () => {
     const index = scans.findIndex((s) => s.id === props.scanId);
     scan.value = scans[index] ?? null;
     previous.value = index >= 0 ? scans[index + 1] ?? null : null;
+    const older = index >= 0 ? scans.slice(index + 1) : [];
+    const clearIndex = older.findIndex((s) => s.clearedByUser);
+    if (clearIndex !== -1) {
+        const chain = [...older.slice(0, clearIndex).reverse(), scans[index]];
+        const otherClear = chain.some((s, i) => i > 0 && clearedBetween(chain[i - 1], s));
+        if (!otherClear) userClear.value = older[clearIndex];
+    }
     loaded.value = true;
 });
 
-const findings = computed(() => (scan.value ? analyzeScan(scan.value.result) : []));
+const findings = computed(() => (scan.value ? analyzeScan(scan.value.result, scan.value.odometer, userClear.value !== null) : []));
 
 async function remove(): Promise<void> {
     if (!scan.value || !confirm('Supprimer ce scan ?')) return;
     await db.deleteScan(scan.value.id);
     navigate({ name: 'vehicle', id: props.vehicleId }, true);
+}
+
+function km(value: number | null | undefined): string {
+    return value == null ? '—' : `${Math.round(value).toLocaleString('fr-FR')} km`;
 }
 
 function printPage(): void {
@@ -45,10 +59,18 @@ function printPage(): void {
             <template v-if="scan.odometer !== null"> · {{ scan.odometer.toLocaleString('fr-FR') }} km</template>
         </p>
         <p v-if="scan.note" class="card small">📝 {{ scan.note }}</p>
+        <p v-if="scan.clearedByUser" class="notice info small">Vous avez effacé les codes avec l'app juste après ce scan.</p>
 
         <div class="row no-print actions">
             <button v-if="previous" class="primary" @click="navigate({ name: 'compare', vehicleId, beforeId: previous.id, afterId: scan.id })">
                 Comparer au scan précédent
+            </button>
+            <button
+                v-if="userClear && userClear.id !== previous?.id"
+                class="primary"
+                @click="navigate({ name: 'compare', vehicleId, beforeId: userClear.id, afterId: scan.id })"
+            >
+                Comparer à avant l'effacement
             </button>
             <button @click="printPage">Imprimer / PDF</button>
         </div>
@@ -64,6 +86,44 @@ function printPage(): void {
             hint="Impossibles à effacer avec un outil : ils disparaissent seulement quand la voiture a vérifié elle-même la réparation."
             :dtcs="scan.result.permanent"
         />
+
+        <template v-if="scan.result.full">
+            <h2>Autres calculateurs</h2>
+            <p class="small muted">
+                Codes défaut des calculateurs autres que le moteur. Les descriptions des codes propres à chaque constructeur sont parfois
+                indisponibles : notez le code et cherchez-le avec la marque de la voiture.
+            </p>
+            <ModuleList v-if="scan.result.modules?.length" :modules="scan.result.modules" />
+            <p v-else class="card small muted">
+                Aucun autre calculateur n'a répondu. Certains adaptateurs bon marché ne savent pas les interroger, et certaines voitures les
+                isolent derrière une passerelle.
+            </p>
+
+            <h2>Autotests détaillés (mode 06)</h2>
+            <p class="small muted">Valeurs mesurées par la voiture pendant ses autotests, comparées à ses propres limites.</p>
+            <Mode06List v-if="scan.result.mode06?.length" :tests="scan.result.mode06" />
+            <p v-else class="card small muted">Non fourni par cette voiture.</p>
+
+            <h2>Kilométrage</h2>
+            <div class="grid-2">
+                <div class="stat">
+                    <div class="value">{{ km(scan.odometer) }}</div>
+                    <div class="label">Compteur (votre saisie)</div>
+                </div>
+                <div class="stat">
+                    <div class="value">{{ km(scan.result.odometerObd) }}</div>
+                    <div class="label">Calculateur moteur (OBD)</div>
+                </div>
+                <div v-if="scan.result.odometerCluster != null" class="stat">
+                    <div class="value">{{ km(scan.result.odometerCluster) }}</div>
+                    <div class="label">Tableau de bord (VAG, expérimental)</div>
+                </div>
+            </div>
+            <p v-if="scan.result.odometerObd == null" class="small muted">
+                Le kilométrage OBD n'est fourni que par les voitures récentes (environ 2019 et après).
+            </p>
+            <p v-for="note in scan.result.notes ?? []" :key="note" class="small notice warning">{{ note }}</p>
+        </template>
 
         <h2>Depuis le dernier effacement des codes</h2>
         <div class="grid-2">

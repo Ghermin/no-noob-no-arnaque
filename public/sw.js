@@ -1,4 +1,4 @@
-const CACHE = 'nnna-v1';
+const CACHE = 'nnna-v2';
 
 self.addEventListener('install', () => self.skipWaiting());
 

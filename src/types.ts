@@ -1,3 +1,5 @@
+import type { Mode06Test } from './obd/mode06';
+
 export type Fuel = 'diesel' | 'essence' | 'hybride' | 'gpl' | 'electrique' | 'inconnu';
 
 export const FUEL_LABELS: Record<Fuel, string> = {
@@ -38,6 +40,26 @@ export interface ScanResult {
     fuelCode: number | null;
     supportedPids: number[];
     ecus: string[];
+    full?: boolean;
+    odometerObd?: number | null;
+    odometerCluster?: number | null;
+    mode06?: Mode06Test[] | null;
+    modules?: EcuReport[];
+    notes?: string[];
+}
+
+export interface ExtDtc {
+    code: string;
+    description: string;
+    status: string | null;
+}
+
+export interface EcuReport {
+    id: string;
+    name: string;
+    protocol: string;
+    partNumber: string | null;
+    dtcs: ExtDtc[];
 }
 
 export type ScanLabel = 'controle' | 'avant-garage' | 'apres-garage' | 'achat-occasion';
@@ -67,4 +89,5 @@ export interface SavedScan {
     odometer: number | null;
     note: string;
     result: ScanResult;
+    clearedByUser?: boolean;
 }

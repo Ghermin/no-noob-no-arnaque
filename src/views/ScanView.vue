@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue';
+import { reactive, ref } from 'vue';
 import { elm, navigate, refreshVehicles, state } from '../store';
 import { db, newId } from '../storage';
 import { runScan } from '../obd/scanner';
@@ -10,9 +10,10 @@ import VehicleForm from '../components/VehicleForm.vue';
 
 const props = defineProps<{ vehicleId: string | null }>();
 
-type Step = 'scanning' | 'error' | 'vehicle' | 'mismatch' | 'details';
+type Step = 'choose' | 'scanning' | 'error' | 'vehicle' | 'mismatch' | 'details';
 
-const step = ref<Step>('scanning');
+const step = ref<Step>('choose');
+const full = ref(false);
 const progress = ref('Préparation…');
 const error = ref('');
 const result = ref<ScanResult | null>(null);
@@ -59,7 +60,8 @@ async function loadLastOdometer(vehicleId: string): Promise<void> {
     lastOdometer.value = previous?.odometer ?? null;
 }
 
-async function scan(): Promise<void> {
+async function scan(fullScan = full.value): Promise<void> {
+    full.value = fullScan;
     if (!elm.value) {
         error.value = "L'adaptateur n'est pas connecté.";
         step.value = 'error';
@@ -67,7 +69,7 @@ async function scan(): Promise<void> {
     }
     step.value = 'scanning';
     try {
-        result.value = await runScan(elm.value, (message) => (progress.value = message));
+        result.value = await runScan(elm.value, (message) => (progress.value = message), fullScan);
         resolveVehicle(result.value);
         if (vehicle.value && !isNewVehicle.value) await loadLastOdometer(vehicle.value.id);
     } catch (e) {
@@ -76,7 +78,6 @@ async function scan(): Promise<void> {
     }
 }
 
-onMounted(scan);
 
 function useNewVehicle(): void {
     if (!result.value) return;
@@ -113,15 +114,30 @@ async function save(): Promise<void> {
 <template>
     <h1>Scan</h1>
 
-    <div v-if="step === 'scanning'" class="card">
+    <div v-if="step === 'choose'" class="stack">
+        <button class="card choice" :disabled="!elm" @click="scan(false)">
+            <strong>Scan rapide</strong>
+            <span class="small muted">Calculateur moteur : codes défaut, autotests, effacement récent. 10 à 30 secondes.</span>
+        </button>
+        <button class="card choice" :disabled="!elm" @click="scan(true)">
+            <strong>Scan complet</strong>
+            <span class="small muted">
+                En plus : autres calculateurs (ABS, airbag, tableau de bord…), autotests détaillés et kilométrage quand la voiture le permet. 1 à
+                3 minutes, moteur arrêté et contact mis.
+            </span>
+        </button>
+        <p v-if="!elm" class="small muted">Connectez l'adaptateur pour scanner.</p>
+    </div>
+
+    <div v-else-if="step === 'scanning'" class="card">
         <p><span class="spinner" aria-hidden="true"></span> {{ progress }}</p>
-        <p class="small muted">Gardez le contact mis. Le scan prend 10 à 30 secondes.</p>
+        <p class="small muted">Gardez le contact mis{{ full ? ' et ne démarrez pas le moteur' : '' }}.</p>
     </div>
 
     <div v-else-if="step === 'error'" class="notice danger">
         <strong>Le scan a échoué</strong>
         <p class="small">{{ error }}</p>
-        <button :disabled="!elm" @click="scan">Réessayer</button>
+        <button :disabled="!elm" @click="scan()">Réessayer</button>
     </div>
 
     <div v-else-if="step === 'mismatch' && vehicle" class="notice warning">
@@ -168,6 +184,17 @@ async function save(): Promise<void> {
 <style scoped>
 .hint {
     font-weight: 400;
+}
+
+.choice {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    text-align: left;
+    gap: 4px;
+    width: 100%;
+    font-weight: 400;
+    margin: 0;
 }
 
 .spinner {
