@@ -1,5 +1,6 @@
 import type { Transport } from './transport';
 import { isErrorResponse, parseResponse, protocolKind, type EcuMessage, type ProtocolKind } from './frames';
+import { logLine } from './log';
 
 const PROTOCOL_NAMES: Record<string, string> = {
     '1': 'SAE J1850 PWM',
@@ -46,6 +47,7 @@ export class Elm327 {
         const { resolve, timer } = this.pending;
         clearTimeout(timer);
         this.pending = null;
+        logLine('<', response.trim());
         resolve(response);
     }
 
@@ -53,8 +55,10 @@ export class Elm327 {
         const run = () =>
             new Promise<string>((resolve, reject) => {
                 this.buffer = '';
+                logLine('>', command);
                 const timer = setTimeout(() => {
                     this.pending = null;
+                    logLine('!', `timeout ${command}`);
                     reject(new Error(`Pas de réponse de l'adaptateur à « ${command} »`));
                 }, timeoutMs);
                 this.pending = { resolve, reject, timer };
@@ -90,6 +94,30 @@ export class Elm327 {
         const raw = await this.send(command, timeoutMs);
         if (isErrorResponse(raw)) return [];
         return parseResponse(raw, this.kind).filter((m) => m.data[0] === mode + 0x40);
+    }
+
+    async query(payload: string, timeoutMs = 5000): Promise<EcuMessage[]> {
+        const raw = await this.send(payload, timeoutMs);
+        if (isErrorResponse(raw)) return [];
+        return parseResponse(raw, this.kind);
+    }
+
+    async tryCommands(commands: string[]): Promise<void> {
+        for (const command of commands) {
+            try {
+                await this.send(command, 2000);
+            } catch {
+                logLine('!', `ignored ${command}`);
+            }
+        }
+    }
+
+    async restoreObdDefaults(): Promise<void> {
+        await this.tryCommands(['ATCAF1', 'ATAR', 'ATFCSM0', 'ATSH7DF', 'ATST32', 'ATAT1']);
+    }
+
+    get protocolKind(): ProtocolKind {
+        return this.kind;
     }
 
     get isCan(): boolean {

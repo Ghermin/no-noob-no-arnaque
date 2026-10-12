@@ -6,6 +6,7 @@ import { SEVERITY_LABELS, formatDate, vehicleSubtitle, worstSeverity } from '../
 import { isVag } from '../obd/vin';
 import { SCAN_LABELS, type SavedScan, type Vehicle } from '../types';
 import VehicleForm from '../components/VehicleForm.vue';
+import ClearCodes from '../components/ClearCodes.vue';
 
 const props = defineProps<{ vehicleId: string }>();
 
@@ -14,10 +15,20 @@ const scans = ref<SavedScan[]>([]);
 const editing = ref(false);
 const selected = ref<string[]>([]);
 const connected = computed(() => elm.value !== null);
+const clearing = ref(false);
+const clearedMessage = ref(false);
 
-onMounted(async () => {
+async function loadScans(): Promise<void> {
     scans.value = await db.scans(props.vehicleId);
-});
+}
+
+onMounted(loadScans);
+
+async function onCleared(): Promise<void> {
+    clearing.value = false;
+    clearedMessage.value = true;
+    await loadScans();
+}
 
 async function save(updated: Vehicle): Promise<void> {
     await db.saveVehicle(updated);
@@ -67,12 +78,18 @@ function compare(): void {
         <div class="row actions">
             <button class="primary" :disabled="!connected" @click="navigate({ name: 'scan', vehicleId: vehicle.id })">Nouveau scan</button>
             <button :disabled="!connected" @click="navigate({ name: 'live', vehicleId: vehicle.id })">Données en direct</button>
+            <button v-if="!clearing" :disabled="!connected" @click="clearing = true; clearedMessage = false">Effacer les codes</button>
+        </div>
+        <ClearCodes v-if="clearing" :vehicle="vehicle" @done="onCleared" @cancel="clearing = false" />
+        <div v-if="clearedMessage" class="notice ok small" role="status">
+            <strong>Codes effacés.</strong> Le scan d'avant effacement est dans l'historique. Roulez quelques trajets (dont un sur route), puis
+            faites un nouveau scan : la comparaison dira si les défauts sont revenus.
         </div>
         <p v-if="!connected" class="small muted">Connectez l'adaptateur (en haut) pour scanner.</p>
 
         <p v-if="isVag(vehicle.make)" class="notice info small">
-            Véhicule du groupe VAG : la lecture des autres calculateurs (ABS, airbag, tableau de bord, kilométrage) est prévue dans une prochaine
-            version.
+            Véhicule du groupe VAG : le <strong>scan complet</strong> lit aussi l'ABS, l'airbag et le tableau de bord (y compris le kilométrage).
+            Cette lecture est expérimentale.
         </p>
 
         <div class="spread">
@@ -95,12 +112,13 @@ function compare(): void {
             <button class="link open" @click="navigate({ name: 'report', vehicleId: vehicle.id, scanId: scan.id })">
                 <span class="spread">
                     <strong>{{ SCAN_LABELS[scan.label] }}</strong>
-                    <span class="badge" :class="worstSeverity(scan.result)">{{ SEVERITY_LABELS[worstSeverity(scan.result)] }}</span>
+                    <span class="badge" :class="worstSeverity(scan.result, scan.odometer)">{{ SEVERITY_LABELS[worstSeverity(scan.result, scan.odometer)] }}</span>
                 </span>
                 <span class="small muted">
                     {{ formatDate(scan.date) }}
                     <template v-if="scan.odometer !== null"> · {{ scan.odometer.toLocaleString('fr-FR') }} km</template>
                     · {{ scan.result.stored.length + scan.result.pending.length }} code(s)
+                    <template v-if="scan.clearedByUser"> · <strong>effacés ensuite par vous</strong></template>
                 </span>
             </button>
         </div>

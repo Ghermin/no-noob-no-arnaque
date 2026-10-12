@@ -6,6 +6,8 @@ import { isWebBluetoothAvailable } from '../obd/transport';
 import { SEVERITY_LABELS, formatDate, vehicleSubtitle, worstSeverity } from '../format';
 import type { SavedScan, Vehicle } from '../types';
 import VehicleForm from '../components/VehicleForm.vue';
+import { downloadText } from '../download';
+import { exportLog } from '../obd/log';
 
 const bluetooth = isWebBluetoothAvailable();
 const connected = computed(() => elm.value !== null);
@@ -33,13 +35,21 @@ async function addVehicle(vehicle: Vehicle): Promise<void> {
 }
 
 async function exportBackup(): Promise<void> {
-    const blob = new Blob([await db.exportAll()], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `no-noob-no-arnaque-${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadText(`no-noob-no-arnaque-${new Date().toISOString().slice(0, 10)}.json`, await db.exportAll(), 'application/json');
+}
+
+function exportJournal(): void {
+    downloadText(
+        `journal-obd-${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}.txt`,
+        exportLog({
+            app: 'No Noob No Arnaque',
+            date: new Date().toISOString(),
+            adaptateur: elm.value?.name ?? 'déconnecté',
+            version: elm.value?.adapterVersion ?? '—',
+            protocole: elm.value?.protocolName ?? '—',
+            navigateur: navigator.userAgent
+        })
+    );
 }
 
 async function importBackup(event: Event): Promise<void> {
@@ -113,8 +123,8 @@ async function importBackup(event: Event): Promise<void> {
                 <div class="name">{{ vehicle.name }}</div>
                 <div class="small muted">{{ vehicleSubtitle(vehicle) }}</div>
             </div>
-            <span v-if="lastScans[vehicle.id]" class="badge" :class="worstSeverity(lastScans[vehicle.id]!.result)">
-                {{ SEVERITY_LABELS[worstSeverity(lastScans[vehicle.id]!.result)] }}
+            <span v-if="lastScans[vehicle.id]" class="badge" :class="worstSeverity(lastScans[vehicle.id]!.result, lastScans[vehicle.id]!.odometer)">
+                {{ SEVERITY_LABELS[worstSeverity(lastScans[vehicle.id]!.result, lastScans[vehicle.id]!.odometer)] }}
             </span>
         </div>
         <div class="small muted">
@@ -134,6 +144,14 @@ async function importBackup(event: Event): Promise<void> {
         </label>
     </div>
     <p v-if="backupMessage" class="small" role="status">{{ backupMessage }}</p>
+
+    <h2>Un souci avec votre voiture ou votre adaptateur ?</h2>
+    <p class="small muted">
+        Le journal technique contient les échanges bruts avec l'adaptateur depuis l'ouverture de la page. Il contient le VIN de la voiture,
+        mais aucune autre donnée personnelle. Joignez-le à un signalement sur
+        <a href="https://github.com/Ghermin/no-noob-no-arnaque/issues" target="_blank" rel="noopener">GitHub</a>.
+    </p>
+    <button @click="exportJournal">Télécharger le journal technique</button>
 </template>
 
 <style scoped>

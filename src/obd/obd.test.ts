@@ -124,7 +124,7 @@ describe('end-to-end with the simulator', () => {
         expect(analyzeScan(after.result).some((f) => f.title.includes('Effacement récent'))).toBe(true);
         const cmp = compareScans(before, after);
         expect(cmp.findings[0].title).toContain('effacés');
-        expect(cmp.persisting).toEqual(['P0401']);
+        expect(cmp.persisting.map((c) => c.code)).toEqual(['P0401']);
 
         sim.drive(80);
         const later = saved(await runScan(elm), 3);
@@ -138,7 +138,7 @@ describe('end-to-end with the simulator', () => {
         sim.drive(80);
         const after = saved(await runScan(elm), 2);
         const cmp = compareScans(before, after);
-        expect(cmp.fixed).toEqual(['P0401']);
+        expect(cmp.fixed.map((c) => c.code)).toEqual(['P0401']);
         expect(cmp.findings.some((f) => f.title === 'Réparation confirmée par la voiture')).toBe(true);
     });
 });
