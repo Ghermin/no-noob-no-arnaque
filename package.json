@@ -1,0 +1,25 @@
+{
+  "name": "no-noob-no-arnaque",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Diagnostic OBD-II dans le navigateur pour vérifier ce que dit le garagiste.",
+  "license": "MIT",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "vue": "^3.5.13"
+  },
+  "devDependencies": {
+    "@types/web-bluetooth": "^0.0.21",
+    "@vitejs/plugin-vue": "^5.2.4",
+    "typescript": "~5.8.3",
+    "vite": "^6.3.5",
+    "vitest": "^4.1.11",
+    "vue-tsc": "^2.2.10"
+  }
+}
