@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { decodeMode06Records, monitorName } from './mode06';
-import { decodeKwpDtcs, decodeUdsDtcs } from './modules';
+import { decodeGmlanFrames, decodeKwpDtcs, decodeUdsDtcs } from './modules';
+import { guessFuel } from '../format';
 import { decodeVagDtcs, describeVagCode } from './vag';
 import { Elm327 } from './elm327';
 import { Simulator, createSimulatorTransport, type DemoProfile } from './simulator';
@@ -119,5 +120,49 @@ describe('user clear', () => {
         const cmp = compareScans(before, later, true);
         expect(cmp.findings[0].title).toBe('Codes effacés par vous entre les deux scans');
         expect(cmp.findings.some((f) => f.title === 'Défaut revenu après effacement')).toBe(true);
+    });
+});
+
+describe('full scan — Ford (Puma flexifuel)', () => {
+    it('names Ford modules, reads ethanol support and mileage', async () => {
+        const { elm } = await connectedSim('puma');
+        const result = await runScan(elm, undefined, true);
+        expect(result.modules!.map((m) => m.name)).toEqual([
+            'Passerelle (GWM)',
+            'Tableau de bord (IPC)',
+            'Boîtier habitacle (BCM)',
+            'Airbag (RCM)',
+            'ABS / ESP',
+            'Moteur (PCM)'
+        ]);
+        expect(result.supportedPids).toContain(0x52);
+        expect(guessFuel(result)).toBe('ethanol');
+        expect(result.odometerObd).toBeCloseTo(21780.4);
+        expect(analyzeScan(result, 21780)[0].title).toBe('Aucun défaut détecté');
+    }, 20000);
+});
+
+describe('full scan — GM (Captiva)', () => {
+    it('reads GMLAN modules and the KWP engine module', async () => {
+        const { sim, elm } = await connectedSim('captiva');
+        const result = await runScan(elm, undefined, true);
+        expect(result.vin).toBe('KL1CA26YJ8B000000');
+        expect(result.pending.map((d) => d.code)).toEqual(['P0380']);
+        const abs = result.modules!.find((m) => m.name === 'ABS / ESP (EBCM)')!;
+        expect(abs.protocol).toBe('GMLAN (expérimental)');
+        expect(abs.dtcs.map((d) => d.code)).toEqual(['C0035-00']);
+        expect(result.modules!.find((m) => m.name === 'Airbag (SDM)')!.dtcs).toEqual([]);
+        expect(result.modules!.find((m) => m.name === 'Moteur (ECM)')!.protocol).toBe('KWP2000 sur CAN');
+
+        sim.drive(80);
+        const later = await runScan(elm, undefined, true);
+        expect(later.stored.map((d) => d.code)).toEqual(['P0380']);
+        expect(later.modules!.find((m) => m.name === 'Moteur (ECM)')!.dtcs.map((d) => d.code)).toEqual(['P0380']);
+    }, 30000);
+
+    it('decodes GMLAN UUDT frames and negative responses', () => {
+        expect(decodeGmlanFrames('5438140350A0AAAA\r543810000000AAAA', 0x643)!.map((d) => d.code)).toEqual(['C0035-0A']);
+        expect(decodeGmlanFrames('643037FA911', 0x643)).toBeNull();
+        expect(decodeGmlanFrames('NO DATA', 0x643)).toBeNull();
     });
 });

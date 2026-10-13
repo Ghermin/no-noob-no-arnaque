@@ -1,7 +1,7 @@
 import type { EcuReport, ExtDtc } from '../types';
 import type { Elm327 } from './elm327';
 import { decodeDtcBytes, describeDtc } from './dtc';
-import type { EcuMessage } from './frames';
+import { parseRawFrames, type EcuMessage } from './frames';
 
 export type Progress = (message: string) => void;
 
@@ -28,6 +28,25 @@ const KNOWN_NAMES: Record<string, Record<number, string>> = {
         0x745: 'Boîtier habitacle (UCH)',
         0x752: 'Airbag'
     },
+    ford: {
+        0x7e0: 'Moteur (PCM)',
+        0x7e1: 'Boîte de vitesses (TCM)',
+        0x716: 'Passerelle (GWM)',
+        0x720: 'Tableau de bord (IPC)',
+        0x726: 'Boîtier habitacle (BCM)',
+        0x730: 'Direction assistée (PSCM)',
+        0x737: 'Airbag (RCM)',
+        0x760: 'ABS / ESP',
+        0x7d0: 'Multimédia (APIM / SYNC)'
+    },
+    gm: {
+        0x7e0: 'Moteur (ECM)',
+        0x7e2: 'Boîte de vitesses (TCM)',
+        0x241: 'Boîtier habitacle (BCM)',
+        0x243: 'ABS / ESP (EBCM)',
+        0x247: 'Airbag (SDM)',
+        0x24c: 'Tableau de bord (IPC)'
+    },
     generic: {
         0x7e0: 'Moteur',
         0x7e1: 'Boîte de vitesses'
@@ -37,6 +56,8 @@ const KNOWN_NAMES: Record<string, Record<number, string>> = {
 export function brandFamily(make: string | null): keyof typeof KNOWN_NAMES {
     if (make && ['Seat', 'Volkswagen', 'Volkswagen Utilitaires', 'Škoda', 'Audi'].includes(make)) return 'vag';
     if (make && ['Renault', 'Dacia'].includes(make)) return 'renault';
+    if (make === 'Ford') return 'ford';
+    if (make && ['Chevrolet', 'Daewoo', 'Cadillac', 'Opel'].includes(make)) return 'gm';
     return 'generic';
 }
 
@@ -77,12 +98,10 @@ export function decodeKwpDtcs(data: number[]): ExtDtc[] {
     return dtcs;
 }
 
-async function discover(elm: Elm327, progress: Progress): Promise<{ tx: number; rx: number }[]> {
-    await elm.tryCommands(['ATCAF1', 'ATH1', 'ATS0', 'ATAT0', 'ATST10', 'ATCF700', 'ATCM700']);
-    const found: { tx: number; rx: number }[] = [];
-    for (let tx = 0x700; tx <= 0x7f7; tx++) {
-        if (tx === 0x7df || (tx >= 0x7e8 && tx <= 0x7ef)) continue;
-        if (tx % 16 === 0) progress(`Recherche des calculateurs… (${Math.round(((tx - 0x700) / 0xf8) * 100)} %)`);
+async function sweep(elm: Elm327, ids: number[], filter: string, progress: Progress, found: { tx: number; rx: number }[]): Promise<void> {
+    await elm.tryCommands(['ATCAF1', 'ATH1', 'ATS0', 'ATAT0', 'ATST10', `ATCF${filter}`, 'ATCM700']);
+    for (const [index, tx] of ids.entries()) {
+        if (index % 16 === 0) progress(`Recherche des calculateurs… (${Math.round((index / ids.length) * 100)} %)`);
         if (found.some((f) => f.rx === tx)) continue;
         await elm.send(`ATSH${hex3(tx)}`);
         const messages = await elm.query('3E00', 1500);
@@ -93,11 +112,50 @@ async function discover(elm: Elm327, progress: Progress): Promise<{ tx: number; 
             }
         }
     }
+}
+
+async function discover(elm: Elm327, family: keyof typeof KNOWN_NAMES, progress: Progress): Promise<{ tx: number; rx: number }[]> {
+    const found: { tx: number; rx: number }[] = [];
+    const standard: number[] = [];
+    for (let tx = 0x700; tx <= 0x7f7; tx++) {
+        if (tx !== 0x7df && (tx < 0x7e8 || tx > 0x7ef)) standard.push(tx);
+    }
+    await sweep(elm, standard, '700', progress, found);
+    if (family === 'gm') {
+        const gmlan = Array.from({ length: 0x20 }, (_, i) => 0x240 + i);
+        await sweep(elm, gmlan, '600', (m) => progress(`${m} — adresses GM`), found);
+    }
     return found;
 }
 
+export function decodeGmlanFrames(raw: string, rx: number): ExtDtc[] | null {
+    const frames = parseRawFrames(raw).filter((f) => (f.id & 0xff) === (rx & 0xff));
+    if (frames.some((f) => f.id === rx && f.data[1] === 0x7f)) return null;
+    const records = frames.filter((f) => f.id !== rx && f.data[0] === 0x81);
+    if (records.length === 0) return frames.length > 0 ? [] : null;
+    const dtcs: ExtDtc[] = [];
+    for (const { data } of records) {
+        const [, a, b, ftb, status] = data;
+        if (a === 0 && b === 0) continue;
+        const base = decodeDtcBytes(a, b);
+        const code = `${base}-${ftb.toString(16).toUpperCase().padStart(2, '0')}`;
+        if (dtcs.some((d) => d.code === code)) continue;
+        dtcs.push({ code, description: describeDtc(base).description, status: `statut 0x${status.toString(16).toUpperCase().padStart(2, '0')}` });
+    }
+    return dtcs;
+}
+
+async function readGmlanDtcs(elm: Elm327, tx: number, rx: number): Promise<ExtDtc[] | null> {
+    try {
+        await elm.tryCommands(['ATCAF0', `ATSH${hex3(tx)}`, `ATCF${hex3(rx & 0xff)}`, 'ATCM0FF', 'ATSTFF']);
+        return decodeGmlanFrames(await elm.send('03A981FF', 6000), rx);
+    } finally {
+        await elm.tryCommands(['ATCAF1', 'ATST64']);
+    }
+}
+
 async function readEcu(elm: Elm327, tx: number, rx: number, family: keyof typeof KNOWN_NAMES): Promise<EcuReport> {
-    await elm.tryCommands(['ATST64', `ATSH${hex3(tx)}`, `ATCRA${hex3(rx)}`, `ATFCSH${hex3(tx)}`, 'ATFCSD300000', 'ATFCSM1']);
+    await elm.tryCommands(['ATCAF1', 'ATST64', `ATSH${hex3(tx)}`, `ATCRA${hex3(rx)}`, `ATFCSH${hex3(tx)}`, 'ATFCSD300000', 'ATFCSM1']);
 
     const name = (await elm.query('22F197')).find((m) => m.data[0] === 0x62);
     const part = (await elm.query('22F187')).find((m) => m.data[0] === 0x62);
@@ -114,7 +172,13 @@ async function readEcu(elm: Elm327, tx: number, rx: number, family: keyof typeof
             protocol = 'KWP2000 sur CAN';
             dtcs = decodeKwpDtcs(kwp.data);
         } else {
-            protocol = 'non identifié';
+            const gm = family === 'gm' ? await readGmlanDtcs(elm, tx, rx) : null;
+            if (gm) {
+                protocol = 'GMLAN (expérimental)';
+                dtcs = gm;
+            } else {
+                protocol = 'non identifié';
+            }
         }
     }
 
@@ -131,7 +195,7 @@ export async function scanModules(elm: Elm327, make: string | null, progress: Pr
     if (elm.protocolKind !== 'can11') return [];
     const family = brandFamily(make);
     try {
-        const found = await discover(elm, progress);
+        const found = await discover(elm, family, progress);
         const reports: EcuReport[] = [];
         for (const [index, { tx, rx }] of found.entries()) {
             progress(`Lecture des calculateurs… (${index + 1}/${found.length})`);

@@ -1,6 +1,6 @@
 import type { Transport } from './transport';
 
-export type DemoProfile = 'ibiza' | 'citadine';
+export type DemoProfile = 'ibiza' | 'citadine' | 'puma' | 'captiva';
 
 export const DEMO_PROFILES: Record<DemoProfile, { label: string; story: string }> = {
     ibiza: {
@@ -10,8 +10,25 @@ export const DEMO_PROFILES: Record<DemoProfile, { label: string; story: string }
     citadine: {
         label: 'Citadine essence 2020',
         story: "Aucun voyant, mais un autotest du catalyseur hors limites et un défaut dans l'ABS. Calculateurs en UDS, kilométrage lisible."
+    },
+    puma: {
+        label: 'Ford Puma Flexifuel E85 2022',
+        story: "Voiture saine : aucun défaut. Calculateurs Ford en UDS, taux d'éthanol et kilométrage lisibles."
+    },
+    captiva: {
+        label: 'Chevrolet Captiva 2.0 VCDi 2008',
+        story: 'Diesel avec un code en attente sur les bougies de préchauffage et un défaut ABS. Calculateurs GM en GMLAN, moteur en KWP2000.'
     }
 };
+
+interface UdsEcu {
+    rx: number;
+    name: string | null;
+    part: string | null;
+    dtcs: () => number[][];
+    kwp?: boolean;
+    gmlan?: boolean;
+}
 
 interface SimModule {
     name: string;
@@ -87,11 +104,11 @@ export class Simulator {
     }
 
     private get diesel(): boolean {
-        return this.profile === 'ibiza';
+        return this.profile === 'ibiza' || this.profile === 'captiva';
     }
 
     get vin(): string {
-        return this.diesel ? 'VSSZZZ6JZAR000000' : 'VF1RJA00XL5000000';
+        return { ibiza: 'VSSZZZ6JZAR000000', citadine: 'VF1RJA00XL5000000', puma: 'WF0FXXGCHNA000000', captiva: 'KL1CA26YJ8B000000' }[this.profile];
     }
 
     get dashboardKm(): number {
@@ -99,19 +116,20 @@ export class Simulator {
     }
 
     private initialState(): SimState {
-        const diesel = this.profile === 'ibiza';
+        const ibiza = this.profile === 'ibiza';
+        const captiva = this.profile === 'captiva';
         return {
-            stored: diesel ? ['P0401'] : [],
-            pending: [],
-            permanent: diesel ? ['P0401'] : [],
-            fault: diesel ? 'P0401' : null,
+            stored: ibiza ? ['P0401'] : [],
+            pending: captiva ? ['P0380'] : [],
+            permanent: ibiza ? ['P0401'] : [],
+            fault: ibiza ? 'P0401' : captiva ? 'P0380' : null,
             repaired: false,
-            distanceSinceClear: diesel ? 18450 : 9120,
+            distanceSinceClear: ibiza ? 18450 : captiva ? 31200 : 9120,
             warmupsSinceClear: 255,
-            minutesSinceClear: diesel ? 21600 : 9800,
-            distanceWithMil: diesel ? 640 : 0,
+            minutesSinceClear: ibiza ? 21600 : 9800,
+            distanceWithMil: ibiza ? 640 : 0,
             monitorsIncomplete: 0,
-            odometer: diesel ? 152340 : 48230.5,
+            odometer: { ibiza: 152340, citadine: 48230.5, puma: 21780.4, captiva: 187400 }[this.profile],
             clusterOffset: 0
         };
     }
@@ -122,7 +140,7 @@ export class Simulator {
 
     private get supportedPids(): number[] {
         const common = [0x01, 0x04, 0x05, 0x0b, 0x0c, 0x0d, 0x0f, 0x10, 0x1c, 0x1f, 0x21, 0x2d, 0x30, 0x31, 0x33, 0x42, 0x46, 0x49, 0x4d, 0x4e, 0x51];
-        const specific = this.diesel ? [0x23, 0x2c] : [0x06, 0x07, 0x11, 0x14, 0x15, 0xa6];
+        const specific = this.diesel ? [0x23, 0x2c] : [0x06, 0x07, 0x11, 0x14, 0x15, 0xa6, ...(this.profile === 'puma' ? [0x52] : [])];
         return withRangeMarkers([...common, ...specific]);
     }
 
@@ -231,6 +249,8 @@ export class Simulator {
                 return word(s.stored.length > 0 ? 940 : 0);
             case 0x4e:
                 return word(s.minutesSinceClear);
+            case 0x52:
+                return [Math.round((83 * 255) / 100)];
             case 0x51:
                 return [this.diesel ? 0x04 : 0x01];
             case 0xa6: {
@@ -246,13 +266,13 @@ export class Simulator {
         const s = this.state;
         const tests: Record<number, number[][]> = this.diesel
             ? {
-                  0x31: [[0x80, 0x01, ...word(s.fault && !s.repaired ? 70 : 96), ...word(80), ...word(65535)]],
+                  0x31: [[0x80, 0x01, ...word(s.fault === 'P0401' && !s.repaired ? 70 : 96), ...word(80), ...word(65535)]],
                   0x85: [[0x80, 0x1a, ...word(12), ...word(0), ...word(40)]],
                   0xb0: [[0x80, 0x1a, ...word(4), ...word(0), ...word(25)]]
               }
             : {
                   0x01: [[0x01, 0x0a, ...word(3700), ...word(3200), ...word(65535)]],
-                  0x21: [[0x80, 0x01, ...word(118), ...word(0), ...word(100)]],
+                  0x21: [[0x80, 0x01, ...word(this.profile === 'citadine' ? 118 : 42), ...word(0), ...word(100)]],
                   0xa1: [[0x0b, 0x24, ...word(0), ...word(0), ...word(65535)]]
               };
         const mids = Object.keys(tests).map(Number);
@@ -265,7 +285,7 @@ export class Simulator {
     }
 
     private vagModules(): Record<number, SimModule> {
-        if (!this.diesel) return {};
+        if (this.profile !== 'ibiza') return {};
         const s = this.state;
         return {
             0x01: { name: '1.6l R4 EDC   H04', part: '03L906023ML', codes: () => (s.stored.includes('P0401') ? [[...word(16384 + 401), 0x23]] : []) },
@@ -276,8 +296,26 @@ export class Simulator {
         };
     }
 
-    private udsEcus(): Record<number, { rx: number; name: string; part: string; dtcs: () => number[][] }> {
-        if (this.diesel) return {};
+    private udsEcus(): Record<number, UdsEcu> {
+        if (this.profile === 'ibiza') return {};
+        if (this.profile === 'puma') {
+            return {
+                0x716: { rx: 0x71e, name: null, part: 'L1BT-14F642-AD', dtcs: () => [] },
+                0x720: { rx: 0x728, name: null, part: 'L1BT-10849-GBG', dtcs: () => [] },
+                0x726: { rx: 0x72e, name: null, part: 'L1BT-14A067-CF', dtcs: () => [] },
+                0x737: { rx: 0x73f, name: null, part: 'L1BT-14B321-AD', dtcs: () => [] },
+                0x760: { rx: 0x768, name: null, part: 'L1BC-2D053-AF', dtcs: () => [] },
+                0x7e0: { rx: 0x7e8, name: null, part: 'NU5A-12A650-BB', dtcs: () => [] }
+            };
+        }
+        if (this.profile === 'captiva') {
+            return {
+                0x241: { rx: 0x641, name: null, part: null, dtcs: () => [], gmlan: true },
+                0x243: { rx: 0x643, name: null, part: null, dtcs: () => (this.absFault ? [[0x40, 0x35, 0x00, 0x0a]] : []), gmlan: true },
+                0x247: { rx: 0x647, name: null, part: null, dtcs: () => [], gmlan: true },
+                0x7e0: { rx: 0x7e8, name: null, part: null, dtcs: () => (this.state.stored.includes('P0380') ? [[0x03, 0x80, 0x22]] : []), kwp: true }
+            };
+        }
         return {
             0x7e0: { rx: 0x7e8, name: 'INJECTION', part: '237100123R', dtcs: () => [] },
             0x740: { rx: 0x760, name: 'ABS ESP BOSCH 9.3', part: '476606345R', dtcs: () => (this.absFault ? [[0x40, 0x35, 0x1c, 0x09]] : []) },
@@ -316,10 +354,11 @@ export class Simulator {
         const service = parseInt(cmd.slice(0, 2), 16);
         let data: number[];
         if (cmd === '3E00') data = [0x7e, 0x00];
-        else if (cmd === '22F197') data = [0x62, 0xf1, 0x97, ...ascii(ecu.name)];
-        else if (cmd === '22F187') data = [0x62, 0xf1, 0x87, ...ascii(ecu.part)];
-        else if (cmd === '1902FF') data = [0x59, 0x02, 0xff, ...ecu.dtcs().flat()];
-        else data = [0x7f, service, 0x11];
+        else if (cmd === '22F197' && ecu.name) data = [0x62, 0xf1, 0x97, ...ascii(ecu.name)];
+        else if (cmd === '22F187' && ecu.part) data = [0x62, 0xf1, 0x87, ...ascii(ecu.part)];
+        else if (cmd === '1902FF' && !ecu.kwp && !ecu.gmlan) data = [0x59, 0x02, 0xff, ...ecu.dtcs().flat()];
+        else if (cmd === '1802FF00' && ecu.kwp) data = [0x58, ecu.dtcs().length, ...ecu.dtcs().flat()];
+        else data = [0x7f, service, service === 0x22 ? 0x31 : 0x11];
         return canFrames(data, hex(ecu.rx, 3)).join('\r');
     }
 
@@ -389,6 +428,15 @@ export class Simulator {
         }
         if (cmd.startsWith('AT')) return 'OK';
         if (!/^[0-9A-F]+$/.test(cmd)) return '?';
+        const gm = this.udsEcus()[parseInt(this.header, 16)];
+        if (!this.caf && gm?.gmlan) {
+            if (cmd !== '03A981FF') return 'NO DATA';
+            const uudt = hex(gm.rx - 0x100, 3);
+            const records = gm.dtcs();
+            return records.length
+                ? records.map((d) => `${uudt}81${d.map((b) => hex(b)).join('')}AAAA`).join('\r')
+                : `${uudt}8100000000AAAA`;
+        }
         if (!this.caf) {
             const bytes: number[] = [];
             for (let i = 0; i < cmd.length; i += 2) bytes.push(parseInt(cmd.slice(i, i + 2), 16));
