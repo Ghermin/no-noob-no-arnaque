@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue';
 import { elm, navigate, refreshVehicles, state } from '../store';
 import { db, newId } from '../storage';
 import { isWebBluetoothAvailable } from '../obd/transport';
+import { isWebSerialAvailable } from '../obd/serial';
 import { SEVERITY_LABELS, formatDate, vehicleSubtitle, worstSeverity } from '../format';
 import type { SavedScan, Vehicle } from '../types';
 import VehicleForm from '../components/VehicleForm.vue';
@@ -10,6 +11,7 @@ import { downloadText } from '../download';
 import { exportLog } from '../obd/log';
 
 const bluetooth = isWebBluetoothAvailable();
+const serial = isWebSerialAvailable();
 const connected = computed(() => elm.value !== null);
 const adding = ref(false);
 const lastScans = ref<Record<string, SavedScan | undefined>>({});
@@ -77,7 +79,7 @@ async function importBackup(event: Event): Promise<void> {
         </p>
     </section>
 
-    <div v-if="!bluetooth" class="notice warning">
+    <div v-if="!bluetooth && !serial" class="notice warning">
         <strong>Bluetooth indisponible dans ce navigateur.</strong>
         <p class="small">
             Utilisez <strong>Chrome</strong> ou <strong>Edge</strong> sur Android ou sur ordinateur. iPhone et Firefox ne gèrent pas Web Bluetooth.
@@ -90,8 +92,12 @@ async function importBackup(event: Event): Promise<void> {
         <ol class="small steps">
             <li>Achetez un adaptateur <strong>ELM327 en Bluetooth 4.0 (BLE)</strong>. Les modèles en Bluetooth « classique » ne marchent pas dans un navigateur.</li>
             <li>Branchez-le sur la prise OBD, en général sous le volant, et mettez le contact.</li>
-            <li>Appuyez sur <strong>Connecter</strong> en haut et choisissez l'adaptateur.</li>
+            <li>Appuyez sur <strong>{{ serial && bluetooth ? 'Bluetooth' : 'Connecter' }}</strong> en haut et choisissez l'adaptateur.</li>
         </ol>
+        <p v-if="serial" class="small">
+            <strong>Sur ordinateur</strong>, vous pouvez aussi utiliser un <strong>câble OBD USB</strong> (ELM327 USB, OBDLink SX / EX) : branchez-le
+            et appuyez sur <strong>USB</strong>. La vitesse du câble est détectée automatiquement.
+        </p>
         <p class="small muted">Pas d'adaptateur ? Appuyez sur <strong>Démo</strong> pour essayer avec une voiture simulée.</p>
     </div>
 

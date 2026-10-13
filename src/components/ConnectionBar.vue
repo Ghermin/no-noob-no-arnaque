@@ -2,8 +2,10 @@
 import { computed } from 'vue';
 import { connect, disconnect, elm, navigate, state } from '../store';
 import { isWebBluetoothAvailable } from '../obd/transport';
+import { isWebSerialAvailable } from '../obd/serial';
 
 const bluetooth = isWebBluetoothAvailable();
+const serial = isWebSerialAvailable();
 const connected = computed(() => elm.value !== null);
 </script>
 
@@ -18,9 +20,19 @@ const connected = computed(() => elm.value !== null);
                 <button class="small-btn" @click="disconnect()">Déconnecter</button>
             </div>
             <div v-else class="row">
-                <button class="small-btn primary" :disabled="state.connecting || !bluetooth" @click="connect('bluetooth')">
-                    {{ state.connecting ? 'Connexion…' : 'Connecter' }}
-                </button>
+                <span v-if="state.connecting" class="small muted">Connexion…</span>
+                <template v-else>
+                    <button
+                        v-if="bluetooth || !serial"
+                        class="small-btn primary"
+                        :disabled="!bluetooth"
+                        :title="'Adaptateur Bluetooth BLE'"
+                        @click="connect('bluetooth')"
+                    >
+                        {{ serial ? 'Bluetooth' : 'Connecter' }}
+                    </button>
+                    <button v-if="serial" class="small-btn primary" title="Câble OBD USB (ordinateur)" @click="connect('serial')">USB</button>
+                </template>
                 <button class="small-btn" :disabled="state.connecting" @click="connect('demo')">Démo</button>
             </div>
         </div>

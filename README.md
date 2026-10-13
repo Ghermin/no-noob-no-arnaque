@@ -2,7 +2,7 @@
 
 Diagnostic OBD-II directement dans le navigateur, pour vérifier ce que dit le garagiste.
 
-**➡ [Ouvrir l'app](https://ghermin.github.io/no-noob-no-arnaque/)** (Chrome ou Edge, Android ou ordinateur)
+**➡ [Ouvrir l'app](https://ghermin.github.io/no-noob-no-arnaque/)** (Chrome ou Edge, sur Android ou sur ordinateur)
 
 ## Ce que fait l'app
 
@@ -35,8 +35,10 @@ Tout reste dans le navigateur : pas de compte, pas de serveur, aucune donnée en
 
 ## Matériel
 
-Un adaptateur **ELM327 en Bluetooth Low Energy (BLE, Bluetooth 4.0)**, par exemple OBDLink CX ou Vgate iCar Pro BLE.
-Les adaptateurs en Bluetooth « classique » ne sont pas accessibles depuis un navigateur.
+- **Téléphone Android ou ordinateur** : un adaptateur **ELM327 en Bluetooth Low Energy (BLE, Bluetooth 4.0)**, par exemple OBDLink
+  CX, vLinker MC+ ou Vgate iCar Pro BLE. Les adaptateurs en Bluetooth « classique » ne sont pas accessibles depuis un navigateur.
+- **Ordinateur portable** : un **câble OBD USB** (ELM327 USB, OBDLink SX / EX), via Web Serial dans Chrome ou Edge. La vitesse du
+  câble est détectée automatiquement (38 400, 115 200, 9 600, 230 400 ou 500 000 bauds). Le câble USB ne fonctionne pas sur téléphone.
 
 Compatible avec toute voiture équipée de l'OBD-II / EOBD : en Europe, les essences depuis 2001 et les diesels depuis 2004.
 
@@ -69,6 +71,7 @@ Le déploiement sur GitHub Pages est automatique à chaque push sur `main` (`.gi
 | Dossier | Rôle |
 |---|---|
 | `src/obd/transport.ts` | Connexion Web Bluetooth (détection automatique du canal série BLE) |
+| `src/obd/serial.ts` | Connexion câble USB via Web Serial (détection automatique de la vitesse) |
 | `src/obd/elm327.ts` | Protocole ELM327 : file de commandes, initialisation, détection du protocole |
 | `src/obd/frames.ts` | Décodage des trames (CAN ISO-TP multi-trames et anciens protocoles) |
 | `src/obd/dtc.ts` | Codes défaut et descriptions |
@@ -88,6 +91,7 @@ Le déploiement sur GitHub Pages est automatique à chaque push sur `main` (`.gi
 - [x] GM : adresses et lecture des codes GMLAN (expérimental)
 - [x] Carburant éthanol (E85) et taux d'éthanol
 - [x] Effacement des codes moteur avec suivi « revenu / pas revenu »
+- [x] Câble OBD USB sur ordinateur (Web Serial)
 - [ ] Valider TP2.0, GMLAN et UDS sur de vraies voitures (journaux bienvenus)
 - [ ] Réseaux secondaires Ford MS-CAN / GM SW-CAN (adaptateurs compatibles)
 - [ ] Bus CAN 29 bits

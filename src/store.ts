@@ -1,6 +1,7 @@
 import { reactive, shallowRef } from 'vue';
 import { Elm327 } from './obd/elm327';
 import { connectBluetooth } from './obd/transport';
+import { connectSerial } from './obd/serial';
 import { Simulator, createSimulatorTransport, type DemoProfile } from './obd/simulator';
 import { db } from './storage';
 import type { Vehicle } from './types';
@@ -46,7 +47,7 @@ export async function refreshVehicles(): Promise<void> {
     state.vehicles = await db.vehicles();
 }
 
-export async function connect(kind: 'bluetooth' | 'demo', profile: DemoProfile = 'ibiza'): Promise<boolean> {
+export async function connect(kind: 'bluetooth' | 'serial' | 'demo', profile: DemoProfile = 'ibiza'): Promise<boolean> {
     state.connecting = true;
     state.connectionError = '';
     let instance: Elm327 | null = null;
@@ -57,6 +58,8 @@ export async function connect(kind: 'bluetooth' | 'demo', profile: DemoProfile =
             const sim = new Simulator(profile);
             simulator.value = sim;
             transport = createSimulatorTransport(sim);
+        } else if (kind === 'serial') {
+            transport = await connectSerial();
         } else {
             transport = await connectBluetooth();
         }
