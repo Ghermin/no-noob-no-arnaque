@@ -55,7 +55,11 @@ const WMI: Record<string, string> = {
     SAJ: 'Jaguar',
     LRW: 'Tesla',
     '5YJ': 'Tesla',
-    XWE: 'Kia'
+    XWE: 'Kia',
+    KL1: 'Chevrolet',
+    KLA: 'Daewoo',
+    '1G1': 'Chevrolet',
+    NM0: 'Ford'
 };
 
 const VAG = ['Seat', 'Volkswagen', 'Volkswagen Utilitaires', 'Škoda', 'Audi'];

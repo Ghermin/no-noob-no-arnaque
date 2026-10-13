@@ -80,6 +80,17 @@ export function parseResponse(raw: string, kind: ProtocolKind): EcuMessage[] {
     return parseLegacy(lines);
 }
 
+export interface RawFrame {
+    id: number;
+    data: number[];
+}
+
+export function parseRawFrames(raw: string): RawFrame[] {
+    return cleanLines(raw)
+        .filter((l) => /^[0-9A-F]{5,}$/.test(l))
+        .map((l) => ({ id: parseInt(l.slice(0, 3), 16), data: hexBytes(l.slice(3)) }));
+}
+
 export function isErrorResponse(raw: string): boolean {
     const text = raw.replace(/\s+/g, ' ').toUpperCase();
     return ERROR_MARKERS.some((m) => text.includes(m)) && !/[0-9A-F]{6,}/.test(raw.replace(/\s+/g, ''));

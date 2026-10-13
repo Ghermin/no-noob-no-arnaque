@@ -26,13 +26,14 @@ export const LIVE_PIDS: PidDefinition[] = [
     { pid: 0x42, label: 'Tension batterie (calculateur)', unit: 'V', decode: (b) => word(b) / 1000, digits: 2 },
     { pid: 0x49, label: "Position pédale d'accélérateur", unit: '%', decode: percent },
     { pid: 0x23, label: 'Pression rail carburant', unit: 'bar', decode: (b) => (word(b) * 10) / 100, fuels: ['diesel'] },
-    { pid: 0x2c, label: 'EGR commandée', unit: '%', decode: percent, fuels: ['diesel', 'essence', 'hybride', 'gpl'] },
+    { pid: 0x2c, label: 'EGR commandée', unit: '%', decode: percent, fuels: ['diesel', 'essence', 'ethanol', 'hybride', 'gpl'] },
     { pid: 0x2d, label: 'Erreur EGR', unit: '%', decode: trim, digits: 1 },
-    { pid: 0x06, label: 'Correction injection court terme (banc 1)', unit: '%', decode: trim, digits: 1, fuels: ['essence', 'hybride', 'gpl'] },
-    { pid: 0x07, label: 'Correction injection long terme (banc 1)', unit: '%', decode: trim, digits: 1, fuels: ['essence', 'hybride', 'gpl'] },
-    { pid: 0x14, label: 'Sonde lambda amont (banc 1)', unit: 'V', decode: (b) => b[0] / 200, digits: 3, fuels: ['essence', 'hybride', 'gpl'] },
-    { pid: 0x15, label: 'Sonde lambda aval (banc 1)', unit: 'V', decode: (b) => b[0] / 200, digits: 3, fuels: ['essence', 'hybride', 'gpl'] },
-    { pid: 0x11, label: 'Position papillon', unit: '%', decode: percent, fuels: ['essence', 'hybride', 'gpl'] },
+    { pid: 0x06, label: 'Correction injection court terme (banc 1)', unit: '%', decode: trim, digits: 1, fuels: ['essence', 'ethanol', 'hybride', 'gpl'] },
+    { pid: 0x07, label: 'Correction injection long terme (banc 1)', unit: '%', decode: trim, digits: 1, fuels: ['essence', 'ethanol', 'hybride', 'gpl'] },
+    { pid: 0x14, label: 'Sonde lambda amont (banc 1)', unit: 'V', decode: (b) => b[0] / 200, digits: 3, fuels: ['essence', 'ethanol', 'hybride', 'gpl'] },
+    { pid: 0x15, label: 'Sonde lambda aval (banc 1)', unit: 'V', decode: (b) => b[0] / 200, digits: 3, fuels: ['essence', 'ethanol', 'hybride', 'gpl'] },
+    { pid: 0x11, label: 'Position papillon', unit: '%', decode: percent, fuels: ['essence', 'ethanol', 'hybride', 'gpl'] },
+    { pid: 0x52, label: "Taux d'éthanol dans le carburant", unit: '%', decode: percent, fuels: ['ethanol', 'essence'] },
     { pid: 0x5e, label: 'Consommation instantanée', unit: 'L/h', decode: (b) => word(b) / 20, digits: 1 },
     { pid: 0x2f, label: 'Niveau de carburant', unit: '%', decode: percent },
     { pid: 0x46, label: 'Température extérieure', unit: '°C', decode: (b) => b[0] - 40 },
@@ -67,6 +68,7 @@ export function decodeSupportedPids(base: number, bytes: number[]): number[] {
 
 export function fuelFromCode(code: number): Fuel | null {
     if (code === 0x04) return 'diesel';
+    if (code === 0x03 || code === 0x0b || code === 0x12) return 'ethanol';
     if (code === 0x01 || code === 0x09) return 'essence';
     if (code === 0x05 || code === 0x0c) return 'gpl';
     if (code >= 0x11 && code <= 0x14) return 'hybride';

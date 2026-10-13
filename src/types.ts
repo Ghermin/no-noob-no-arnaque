@@ -1,10 +1,11 @@
 import type { Mode06Test } from './obd/mode06';
 
-export type Fuel = 'diesel' | 'essence' | 'hybride' | 'gpl' | 'electrique' | 'inconnu';
+export type Fuel = 'diesel' | 'essence' | 'ethanol' | 'hybride' | 'gpl' | 'electrique' | 'inconnu';
 
 export const FUEL_LABELS: Record<Fuel, string> = {
     diesel: 'Diesel',
     essence: 'Essence',
+    ethanol: 'Éthanol / Flexifuel (E85)',
     hybride: 'Hybride',
     gpl: 'GPL / bicarburation',
     electrique: 'Électrique',

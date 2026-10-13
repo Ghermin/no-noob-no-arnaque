@@ -31,6 +31,7 @@ export function worstSeverity(result: ScanResult, odometer: number | null = null
 }
 
 export function guessFuel(result: ScanResult): Fuel {
+    if (result.supportedPids.includes(0x52)) return 'ethanol';
     if (result.fuelCode !== null) {
         const fuel = fuelFromCode(result.fuelCode);
         if (fuel) return fuel;

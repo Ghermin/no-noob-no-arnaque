@@ -1,7 +1,7 @@
 import type { EcuReport, ExtDtc } from '../types';
 import type { Elm327 } from './elm327';
 import { describeDtc } from './dtc';
-import { cleanLines, hexBytes } from './frames';
+import { parseRawFrames as rawFrames } from './frames';
 import { logLine } from './log';
 import type { Progress } from './modules';
 
@@ -74,17 +74,6 @@ export function decodeMeasuringBlock(payload: number[]): { formula: number; a: n
         fields.push({ formula: payload[i], a: payload[i + 1], b: payload[i + 2] });
     }
     return fields;
-}
-
-interface RawFrame {
-    id: number;
-    data: number[];
-}
-
-function rawFrames(raw: string): RawFrame[] {
-    return cleanLines(raw)
-        .filter((l) => /^[0-9A-F]{5,}$/.test(l))
-        .map((l) => ({ id: parseInt(l.slice(0, 3), 16), data: hexBytes(l.slice(3)) }));
 }
 
 export class Tp20Channel {
