@@ -16,6 +16,7 @@
   },
   "devDependencies": {
     "@types/w3c-web-serial": "^1.0.8",
+    "@types/w3c-web-usb": "^1.0.14",
     "@types/web-bluetooth": "^0.0.21",
     "@vitejs/plugin-vue": "^5.2.4",
     "typescript": "~5.8.3",

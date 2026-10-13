@@ -37,8 +37,11 @@ Tout reste dans le navigateur : pas de compte, pas de serveur, aucune donnée en
 
 - **Téléphone Android ou ordinateur** : un adaptateur **ELM327 en Bluetooth Low Energy (BLE, Bluetooth 4.0)**, par exemple OBDLink
   CX, vLinker MC+ ou Vgate iCar Pro BLE. Les adaptateurs en Bluetooth « classique » ne sont pas accessibles depuis un navigateur.
-- **Ordinateur portable** : un **câble OBD USB** (ELM327 USB, OBDLink SX / EX), via Web Serial dans Chrome ou Edge. La vitesse du
-  câble est détectée automatiquement (38 400, 115 200, 9 600, 230 400 ou 500 000 bauds). Le câble USB ne fonctionne pas sur téléphone.
+- **Câble OBD USB** (ELM327 USB, OBDLink SX / EX) : la vitesse du câble est détectée automatiquement (38 400, 115 200, 9 600,
+  230 400 ou 500 000 bauds).
+  - **Ordinateur** : via Web Serial dans Chrome ou Edge, avec les pilotes du système.
+  - **Téléphone Android** : via WebUSB dans Chrome, avec un adaptateur USB-C OTG. Puces prises en charge : FTDI, CH340, CP2102 et
+    USB standard (CDC). Prolific PL2303 : ordinateur uniquement.
 
 Compatible avec toute voiture équipée de l'OBD-II / EOBD : en Europe, les essences depuis 2001 et les diesels depuis 2004.
 
@@ -52,7 +55,7 @@ Compatible avec toute voiture équipée de l'OBD-II / EOBD : en Europe, les esse
 - Les parties VAG TP2.0 et GMLAN n'ont pas encore été validées sur une vraie voiture. Le journal technique est le bienvenu.
 - Les réseaux secondaires (MS-CAN Ford, SW-CAN GM) ne sont pas lus.
 - Ne voit pas l'usure mécanique : freins, pneus, courroie, amortisseurs…
-- Ne fonctionne pas sur iPhone ni dans Firefox, qui ne gèrent pas Web Bluetooth.
+- Ne fonctionne pas sur iPhone ni dans Firefox, qui ne gèrent ni Web Bluetooth ni WebUSB.
 - Outil indicatif, qui ne remplace pas un diagnostic professionnel.
 
 ## Développement
@@ -71,7 +74,8 @@ Le déploiement sur GitHub Pages est automatique à chaque push sur `main` (`.gi
 | Dossier | Rôle |
 |---|---|
 | `src/obd/transport.ts` | Connexion Web Bluetooth (détection automatique du canal série BLE) |
-| `src/obd/serial.ts` | Connexion câble USB via Web Serial (détection automatique de la vitesse) |
+| `src/obd/serial.ts` | Connexion câble USB via Web Serial sur ordinateur (détection automatique de la vitesse) |
+| `src/obd/usb.ts` | Connexion câble USB via WebUSB sur téléphone : pilotes FTDI, CH340, CP210x et CDC |
 | `src/obd/elm327.ts` | Protocole ELM327 : file de commandes, initialisation, détection du protocole |
 | `src/obd/frames.ts` | Décodage des trames (CAN ISO-TP multi-trames et anciens protocoles) |
 | `src/obd/dtc.ts` | Codes défaut et descriptions |
@@ -91,7 +95,7 @@ Le déploiement sur GitHub Pages est automatique à chaque push sur `main` (`.gi
 - [x] GM : adresses et lecture des codes GMLAN (expérimental)
 - [x] Carburant éthanol (E85) et taux d'éthanol
 - [x] Effacement des codes moteur avec suivi « revenu / pas revenu »
-- [x] Câble OBD USB sur ordinateur (Web Serial)
+- [x] Câble OBD USB sur ordinateur (Web Serial) et sur téléphone Android (WebUSB)
 - [ ] Valider TP2.0, GMLAN et UDS sur de vraies voitures (journaux bienvenus)
 - [ ] Réseaux secondaires Ford MS-CAN / GM SW-CAN (adaptateurs compatibles)
 - [ ] Bus CAN 29 bits
