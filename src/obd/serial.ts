@@ -1,44 +1,52 @@
 import type { Transport } from './transport';
 import { logLine } from './log';
+import { describeAnswer, hexId, probeElm, type ProbeRead } from './probe';
 
 const BAUD_RATES = [38400, 115200, 9600, 230400, 500000];
-const PROBE_TIMEOUT_MS = 900;
 
 export function isWebSerialAvailable(): boolean {
     return typeof navigator !== 'undefined' && 'serial' in navigator;
 }
 
-async function readFor(reader: ReadableStreamDefaultReader<Uint8Array>, ms: number): Promise<string> {
+function timedReader(reader: ReadableStreamDefaultReader<Uint8Array>): ProbeRead {
     const decoder = new TextDecoder();
-    let text = '';
-    const deadline = Date.now() + ms;
-    while (Date.now() < deadline) {
-        const remaining = deadline - Date.now();
-        const result = await Promise.race([
-            reader.read(),
-            new Promise<null>((resolve) => setTimeout(() => resolve(null), remaining))
-        ]);
-        if (result === null || result.done) break;
-        text += decoder.decode(result.value, { stream: true });
-        if (text.includes('>')) break;
-    }
-    return text;
+    // Une lecture abandonnée sur délai reste en attente : on la réutilise pour ne pas perdre ce qu'elle recevra.
+    let pending: Promise<ReadableStreamReadResult<Uint8Array>> | null = null;
+    return async (ms, done) => {
+        let text = '';
+        const deadline = Date.now() + ms;
+        while (Date.now() < deadline) {
+            const remaining = deadline - Date.now();
+            pending ??= reader.read();
+            const result = await Promise.race([pending, new Promise<null>((resolve) => setTimeout(() => resolve(null), remaining))]);
+            if (result === null) break;
+            pending = null;
+            if (result.done) break;
+            text += decoder.decode(result.value, { stream: true });
+            if (done(text)) break;
+        }
+        return text;
+    };
 }
 
 async function probe(port: SerialPort, baudRate: number): Promise<ReadableStreamDefaultReader<Uint8Array> | null> {
-    await port.open({ baudRate });
+    try {
+        await port.open({ baudRate });
+    } catch (error) {
+        logLine('!', `série ${baudRate} bauds : ouverture impossible ${(error as Error).name}: ${(error as Error).message}`);
+        throw new Error("Impossible d'ouvrir ce port : il est peut-être utilisé par un autre onglet ou logiciel OBD. Fermez-les, débranchez et rebranchez le câble, puis réessayez.");
+    }
     const reader = port.readable!.getReader();
     const writer = port.writable!.getWriter();
     try {
-        await writer.write(new TextEncoder().encode('\rATI\r'));
-        const answer = await readFor(reader, PROBE_TIMEOUT_MS);
-        logLine('!', `série ${baudRate} bauds : ${answer.trim() || '(rien)'}`);
-        if (/ELM|STN|OBD/i.test(answer) && answer.includes('>')) {
+        const { ok, answer } = await probeElm((text) => writer.write(new TextEncoder().encode(text)), timedReader(reader));
+        logLine('!', `série ${baudRate} bauds : ${describeAnswer(answer)}`);
+        if (ok) {
             writer.releaseLock();
             return reader;
         }
-    } catch {
-        /* vitesse suivante */
+    } catch (error) {
+        logLine('!', `série ${baudRate} bauds : erreur ${(error as Error).name}: ${(error as Error).message}`);
     }
     writer.releaseLock();
     await reader.cancel().catch(() => undefined);
@@ -52,6 +60,13 @@ export async function connectSerial(): Promise<Transport> {
         throw new Error('Connexion USB indisponible : utilisez Chrome ou Edge sur ordinateur.');
     }
     const port = await navigator.serial.requestPort();
+    const portInfo = port.getInfo();
+    logLine(
+        '!',
+        portInfo.usbVendorId === undefined
+            ? `port série sans identifiant USB (Bluetooth ou port natif ?) ${portInfo.bluetoothServiceClassId ?? ''}`.trim()
+            : `port série USB vendor=${hexId(portInfo.usbVendorId)} product=${hexId(portInfo.usbProductId)}`
+    );
 
     let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
     for (const baudRate of BAUD_RATES) {
@@ -62,7 +77,7 @@ export async function connectSerial(): Promise<Transport> {
         throw new Error("Aucun adaptateur ELM327 n'a répondu sur ce port. Vérifiez le câble et que le contact est mis.");
     }
 
-    const activeReader = reader;
+    let activeReader = reader;
     const dataListeners: ((chunk: string) => void)[] = [];
     const disconnectListeners: (() => void)[] = [];
     let closed = false;
@@ -75,15 +90,19 @@ export async function connectSerial(): Promise<Transport> {
 
     (async () => {
         const decoder = new TextDecoder();
-        try {
-            for (;;) {
+        while (!closed) {
+            try {
                 const { value, done } = await activeReader.read();
                 if (done) break;
                 const chunk = decoder.decode(value, { stream: true });
                 dataListeners.forEach((l) => l(chunk));
+            } catch (error) {
+                // Erreur de trame ou de parité : le port reste ouvert et fournit un nouveau flux. Débranché : plus de flux.
+                logLine('!', `lecture série : ${(error as Error).name}: ${(error as Error).message}`);
+                activeReader.releaseLock();
+                if (closed || !port.readable) break;
+                activeReader = port.readable.getReader();
             }
-        } catch {
-            /* câble débranché */
         }
         notifyDisconnect();
     })();

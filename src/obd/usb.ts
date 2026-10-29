@@ -1,8 +1,8 @@
 import type { Transport } from './transport';
 import { logLine } from './log';
+import { describeAnswer, hexId, probeElm, type ProbeRead } from './probe';
 
 const BAUD_RATES = [38400, 115200, 9600, 230400, 500000];
-const PROBE_TIMEOUT_MS = 900;
 
 export const USB_FILTERS: USBDeviceFilter[] = [
     { vendorId: 0x0403 },
@@ -140,6 +140,7 @@ export async function connectUsb(): Promise<Transport> {
         throw new Error('Connexion USB indisponible dans ce navigateur : utilisez Chrome sur Android ou ordinateur.');
     }
     const device = await navigator.usb.requestDevice({ filters: USB_FILTERS });
+    logLine('!', `USB vendor=${hexId(device.vendorId)} product=${hexId(device.productId)} ${device.productName ?? ''}`.trim());
     await device.open();
     if (!device.configuration) await device.selectConfiguration(1);
 
@@ -197,18 +198,24 @@ export async function connectUsb(): Promise<Transport> {
 
     const write = (text: string) => device.transferOut(outEndpoint.endpointNumber, encoder.encode(text));
 
+    const send = (text: string) => {
+        probe.buffer = '';
+        return write(text);
+    };
+    const read: ProbeRead = async (ms, done) => {
+        const deadline = Date.now() + ms;
+        while (Date.now() < deadline && !done(probe.buffer ?? '')) {
+            await new Promise((resolve) => setTimeout(resolve, 20));
+        }
+        return probe.buffer ?? '';
+    };
+
     let found = false;
     for (const baud of BAUD_RATES) {
         await driver.setBaud(baud);
-        probe.buffer = '';
-        await write('\rATI\r');
-        const deadline = Date.now() + PROBE_TIMEOUT_MS;
-        while (Date.now() < deadline && !(probe.buffer ?? '').includes('>')) {
-            await new Promise((resolve) => setTimeout(resolve, 20));
-        }
-        const answer = probe.buffer ?? '';
-        logLine('!', `USB ${driver.name} ${baud} bauds : ${answer.trim() || '(rien)'}`);
-        if (/ELM|STN|OBD/i.test(answer) && answer.includes('>')) {
+        const { ok, answer } = await probeElm(send, read);
+        logLine('!', `USB ${driver.name} ${baud} bauds : ${describeAnswer(answer)}`);
+        if (ok) {
             found = true;
             break;
         }

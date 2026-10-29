@@ -9,7 +9,7 @@ class FakePort extends EventTarget {
     writable: WritableStream<Uint8Array> | null = null;
     opened: number[] = [];
 
-    constructor(private readonly sim: Simulator, private readonly realBaud: number) {
+    constructor(private readonly sim: Simulator, private readonly realBaud: number, private dirty = false) {
         super();
     }
 
@@ -35,7 +35,10 @@ class FakePort extends EventTarget {
                 while (end !== -1) {
                     const command = buffer.slice(0, end).trim();
                     buffer = buffer.slice(end + 1);
-                    if (command) {
+                    if (!command && this.dirty) {
+                        this.dirty = false;
+                        setTimeout(() => controller.enqueue(encoder.encode('?\r\r>')), 2);
+                    } else if (command) {
                         const response = command === 'ATI' ? 'ELM327 v1.5' : this.sim.respond(command);
                         setTimeout(() => controller.enqueue(encoder.encode(`${response}\r\r>`)), 2);
                     }
@@ -69,6 +72,15 @@ describe('USB serial transport', () => {
         await elm.initialize();
         const result = await runScan(elm);
         expect(result.vin).toBe('VF1RJA00XL5000000');
+        await transport.close();
+    });
+
+    it('waits for the ATI answer when the adapter first replies "?"', async () => {
+        const port = new FakePort(new Simulator('citadine'), 38400, true);
+        vi.stubGlobal('navigator', { serial: { requestPort: async () => port } });
+
+        const transport = await connectSerial();
+        expect(port.opened).toEqual([38400]);
         await transport.close();
     });
 
