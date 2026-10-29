@@ -3,6 +3,7 @@ import { Elm327 } from './obd/elm327';
 import { connectBluetooth } from './obd/transport';
 import { connectSerial, isWebSerialAvailable } from './obd/serial';
 import { connectUsb } from './obd/usb';
+import { logLine } from './obd/log';
 import { Simulator, createSimulatorTransport, type DemoProfile } from './obd/simulator';
 import { db } from './storage';
 import type { Vehicle } from './types';
@@ -77,6 +78,7 @@ export async function connect(kind: 'bluetooth' | 'usb' | 'demo', profile: DemoP
         return true;
     } catch (e) {
         const error = e as Error;
+        logLine('!', `connexion ${kind} échouée : ${error.name}: ${error.message}`);
         state.connectionError = error.name === 'NotFoundError' ? '' : error.message;
         simulator.value = null;
         if (instance) await instance.close().catch(() => undefined);

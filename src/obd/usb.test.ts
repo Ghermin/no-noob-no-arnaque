@@ -41,7 +41,7 @@ class FakeUsbDevice {
     private buffer = '';
     private closed = false;
 
-    constructor(private readonly chip: Chip, private readonly sim: Simulator, private readonly goodKey: number) {
+    constructor(private readonly chip: Chip, private readonly sim: Simulator, private readonly goodKey: number, private dirty = false) {
         this.vendorId = chip === 'ftdi' ? 0x0403 : 0x1a86;
     }
 
@@ -70,7 +70,10 @@ class FakeUsbDevice {
         while (end !== -1) {
             const command = this.buffer.slice(0, end).trim();
             this.buffer = this.buffer.slice(end + 1);
-            if (command) {
+            if (!command && this.dirty) {
+                this.dirty = false;
+                this.queue.push(...new TextEncoder().encode('?\r\r>'));
+            } else if (command) {
                 const response = command === 'ATI' ? 'ELM327 v1.5' : this.sim.respond(command);
                 this.queue.push(...new TextEncoder().encode(`${response}\r\r>`));
             }
@@ -119,6 +122,17 @@ describe.each([
         expect(result.modules!.some((m) => m.protocol === 'GMLAN (expérimental)')).toBe(true);
         await transport.close();
     }, 30000);
+});
+
+describe('WebUSB probing', () => {
+    it('waits for the ATI answer when the adapter first replies "?"', async () => {
+        const device = new FakeUsbDevice('ftdi', new Simulator(), 0xc04e, true);
+        vi.stubGlobal('navigator', { usb: { requestDevice: async () => device, addEventListener: () => undefined } });
+
+        const transport = await connectUsb();
+        expect(device.baudKey).toBe(0xc04e);
+        await transport.close();
+    });
 });
 
 describe('WebUSB transport errors', () => {
