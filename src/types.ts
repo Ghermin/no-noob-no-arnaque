@@ -53,6 +53,8 @@ export interface ExtDtc {
     code: string;
     description: string;
     status: string | null;
+    /** Défaut survenu depuis le dernier effacement mais absent aujourd'hui. */
+    history?: boolean;
 }
 
 export interface EcuReport {
@@ -61,6 +63,8 @@ export interface EcuReport {
     protocol: string;
     partNumber: string | null;
     dtcs: ExtDtc[];
+    /** Codes listés par le calculateur dont le test n'a jamais échoué : pas des défauts. */
+    ignored?: number;
 }
 
 export type ScanLabel = 'controle' | 'avant-garage' | 'apres-garage' | 'achat-occasion';

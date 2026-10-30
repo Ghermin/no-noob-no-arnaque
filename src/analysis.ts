@@ -1,5 +1,30 @@
-import type { SavedScan, ScanResult } from './types';
+import type { EcuReport, ExtDtc, SavedScan, ScanResult } from './types';
 import { describeDtc } from './obd/dtc';
+import { monitorName } from './obd/mode06';
+
+export type ModuleDtcKind = 'defaut' | 'historique' | 'non-trie';
+
+// « mémorisé » : statut écrit par les versions qui ne triaient pas les codes UDS jamais tombés en panne.
+export function moduleDtcKind(dtc: ExtDtc): ModuleDtcKind | null {
+    if (dtc.code === '—') return null;
+    if (dtc.history) return 'historique';
+    if (dtc.status === 'mémorisé') return 'non-trie';
+    return 'defaut';
+}
+
+export function moduleDtcs(module: EcuReport, kind: ModuleDtcKind): ExtDtc[] {
+    return module.dtcs.filter((d) => moduleDtcKind(d) === kind);
+}
+
+export function moduleFaultCount(result: ScanResult): number {
+    return (result.modules ?? []).reduce((n, m) => n + moduleDtcs(m, 'defaut').length, 0);
+}
+
+function shortList(dtcs: ExtDtc[], max = 3): string {
+    const shown = dtcs.slice(0, max).map((d) => `${d.code} : ${d.description}`);
+    if (dtcs.length > max) shown.push(`et ${dtcs.length - max} autre(s), voir le détail plus bas`);
+    return shown.join(' ; ');
+}
 
 export type Severity = 'ok' | 'info' | 'warning' | 'danger';
 
@@ -112,12 +137,30 @@ export function analyzeScan(result: ScanResult, odometer: number | null = null, 
     }
 
     for (const module of result.modules ?? []) {
-        const real = module.dtcs.filter((d) => d.code !== '—');
-        if (real.length === 0) continue;
+        const faults = moduleDtcs(module, 'defaut');
+        if (faults.length === 0) continue;
         findings.push({
             severity: /airbag/i.test(module.name) ? 'danger' : 'warning',
-            title: `${module.name} : ${plural(real.length, 'code défaut', 'codes défaut')}`,
-            detail: real.map((d) => `${d.code} (${d.description})`).join(' ; ')
+            title: `${module.name} : ${plural(faults.length, 'défaut', 'défauts')}`,
+            detail: shortList(faults)
+        });
+    }
+
+    const history = (result.modules ?? []).flatMap((m) => moduleDtcs(m, 'historique').map((d) => ({ ...d, code: `${m.name} · ${d.code}` })));
+    if (history.length > 0) {
+        findings.push({
+            severity: 'info',
+            title: plural(history.length, 'défaut passé', 'défauts passés'),
+            detail: `Apparu(s) au moins une fois depuis le dernier effacement des codes, mais absent(s) aujourd'hui (défaut passager ou déjà réparé). ${shortList(history)}.`
+        });
+    }
+
+    const unsorted = (result.modules ?? []).reduce((n, m) => n + moduleDtcs(m, 'non-trie').length, 0);
+    if (unsorted > 0) {
+        findings.push({
+            severity: 'info',
+            title: 'Refaites un scan pour les autres calculateurs',
+            detail: `Ce scan a été fait avec une ancienne version de l'app, qui affichait comme défauts ${plural(unsorted, 'code', 'codes')} des autres calculateurs sans vérifier s'ils étaient vraiment en panne. La plupart ne sont en général que des tests pas encore exécutés. Un nouveau scan fera le tri.`
         });
     }
 
@@ -126,14 +169,14 @@ export function analyzeScan(result: ScanResult, odometer: number | null = null, 
         findings.push({
             severity: 'warning',
             title: plural(failed.length, 'autotest détaillé hors limites', 'autotests détaillés hors limites'),
-            detail: `Concerne : ${[...new Set(failed.map((t) => t.monitor))].join(', ')}. Un test hors limites annonce souvent un défaut avant que le voyant ne s'allume.`
+            detail: `Concerne : ${[...new Set(failed.map((t) => monitorName(t.mid)))].join(', ')}. Un test hors limites annonce souvent un défaut avant que le voyant ne s'allume.`
         });
     }
 
     findings.push(...odometerFindings(result, odometer));
 
     if (findings.length === 0 || findings.every((f) => f.severity === 'info' || f.severity === 'ok')) {
-        const allModules = result.full && (result.modules?.length ?? 0) > 0;
+        const allModules = result.full && (result.modules?.length ?? 0) > 0 && unsorted === 0;
         findings.unshift({
             severity: 'ok',
             title: allModules ? 'Aucun défaut détecté' : 'Aucun défaut moteur détecté',
@@ -185,9 +228,7 @@ function codes(result: ScanResult): Map<string, string> {
     const map = new Map<string, string>();
     for (const d of [...result.stored, ...result.pending, ...result.permanent]) map.set(d.code, describeDtc(d.code).description);
     for (const module of result.modules ?? []) {
-        for (const d of module.dtcs) {
-            if (d.code !== '—') map.set(`${module.name} · ${d.code}`, d.description);
-        }
+        for (const d of moduleDtcs(module, 'defaut')) map.set(`${module.name} · ${d.code}`, d.description);
     }
     return map;
 }

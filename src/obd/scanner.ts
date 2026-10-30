@@ -21,7 +21,13 @@ export async function readSupportedPids(elm: Elm327): Promise<number[]> {
     const supported: number[] = [];
     for (const base of [0x00, 0x20, 0x40, 0x60, 0x80, 0xa0, 0xc0]) {
         if (base !== 0x00 && !supported.includes(base)) break;
-        const bytes = await readPid(elm, base);
+        let bytes = await readPid(elm, base);
+        // La 1re requête après une pause peut échouer (« CAN ERROR » le temps que le bus se réveille).
+        for (let attempt = 0; !bytes && attempt < 2; attempt++) {
+            logLine('!', `PID ${base.toString(16).padStart(2, '0')} sans réponse, nouvel essai`);
+            await new Promise((resolve) => setTimeout(resolve, 500));
+            bytes = await readPid(elm, base);
+        }
         if (!bytes) break;
         supported.push(...decodeSupportedPids(base, bytes));
     }

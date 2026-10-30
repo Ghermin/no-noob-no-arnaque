@@ -44,11 +44,13 @@ const SCALING: Record<number, Scaling> = {
     0x1b: { factor: 10, unit: 'kPa' },
     0x1c: { factor: 0.01, unit: '°' },
     0x1d: { factor: 0.5, unit: '°' },
+    0x20: { factor: 1 / 256, unit: '' },
     0x24: { factor: 1, unit: 'coups' },
     0x25: { factor: 1, unit: 'km' },
     0x27: { factor: 0.01, unit: 'g/s' },
     0x28: { factor: 1, unit: 'g/s' },
     0x2f: { factor: 0.01, unit: '%' },
+    0x30: { factor: 100 / 65535, unit: '%' },
     0x34: { factor: 1, unit: 'min' },
     0x81: { factor: 1, unit: '' },
     0x82: { factor: 0.1, unit: '' },
@@ -90,8 +92,11 @@ export function monitorName(mid: number): string {
     if (from === to) return label;
     if (from === 0x01 || from === 0x41) {
         const index = mid - from;
-        return `${label} banc ${Math.floor(index / 4) + 1} capteur ${(index % 4) + 1}`;
+        const position = ['amont', 'aval', 'capteur 3', 'capteur 4'][index % 4];
+        return `${label} ${position} (banc ${Math.floor(index / 4) + 1})`;
     }
+    // Catalyseur, EGR, VVT, catalyseur chauffé : un moniteur par banc de cylindres.
+    if ([0x21, 0x31, 0x35, 0x61].includes(from)) return `${label} (banc ${mid - from + 1})`;
     return `${label} n°${mid - from + 1}`;
 }
 

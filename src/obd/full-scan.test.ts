@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { decodeMode06Records, monitorName } from './mode06';
 import { decodeGmlanFrames, decodeKwpDtcs, decodeUdsDtcs } from './modules';
+import { describeFailureType } from './dtc';
+import { parseResponse } from './frames';
 import { guessFuel } from '../format';
 import { decodeVagDtcs, describeVagCode } from './vag';
 import { Elm327 } from './elm327';
@@ -13,7 +15,7 @@ describe('mode 06', () => {
     it('decodes records and checks limits on raw values', () => {
         const tests = decodeMode06Records([0x46, 0x21, 0x80, 0x01, 0x00, 0x76, 0x00, 0x00, 0x00, 0x64, 0x01, 0x01, 0x0a, 0x0e, 0x74, 0x0c, 0x80, 0xff, 0xff]);
         expect(tests).toHaveLength(2);
-        expect(tests[0]).toMatchObject({ monitor: 'Catalyseur n°1', value: 118, max: 100, passed: false });
+        expect(tests[0]).toMatchObject({ monitor: 'Catalyseur (banc 1)', value: 118, max: 100, passed: false });
         expect(tests[1].unit).toBe('mV');
         expect(tests[1].passed).toBe(true);
     });
@@ -25,17 +27,71 @@ describe('mode 06', () => {
     });
 
     it('names monitors', () => {
-        expect(monitorName(0x01)).toBe('Sonde lambda banc 1 capteur 1');
-        expect(monitorName(0x06)).toBe('Sonde lambda banc 2 capteur 2');
+        expect(monitorName(0x01)).toBe('Sonde lambda amont (banc 1)');
+        expect(monitorName(0x06)).toBe('Sonde lambda aval (banc 2)');
         expect(monitorName(0xa3)).toBe('Ratés de combustion cylindre 2');
     });
 });
 
 describe('module DTC decoding', () => {
     it('decodes UDS records with failure type and status', () => {
-        const [dtc] = decodeUdsDtcs([0x59, 0x02, 0xff, 0x40, 0x35, 0x1c, 0x09]);
+        const [dtc] = decodeUdsDtcs([0x59, 0x02, 0xff, 0x40, 0x35, 0x1c, 0x09]).dtcs;
         expect(dtc.code).toBe('C0035-1C');
-        expect(dtc.status).toBe('actif, confirmé');
+        expect(dtc.status).toBe('présent en ce moment · confirmé');
+        expect(dtc.history).toBe(false);
+        expect(describeFailureType(dtc.code)).toBe('tension hors plage');
+    });
+
+    it('keeps only UDS codes that actually failed', () => {
+        const { dtcs, ignored } = decodeUdsDtcs([
+            0x59, 0x02, 0xff,
+            0x04, 0x20, 0x00, 0x40, // test pas encore fait ce cycle : pas un défaut
+            0x05, 0x05, 0x00, 0x50, // jamais testé depuis l'effacement : pas un défaut
+            0x01, 0x71, 0x00, 0x24, // en attente
+            0x03, 0x01, 0x00, 0x20, // survenu depuis l'effacement, absent aujourd'hui
+            0xff, 0xff, 0xff, 0x40 // remplissage
+        ]);
+        expect(ignored).toBe(2);
+        expect(dtcs.map((d) => [d.code, d.history])).toEqual([
+            ['P0171-00', false],
+            ['P0301-00', true]
+        ]);
+    });
+
+    it('finds no fault in the real Ford Puma engine module answer (status 0x40 / 0x50 only)', () => {
+        // Réponse brute du PCM d'une Puma mHEV 2022, journal du 30/10/2026.
+        const raw = [
+            '7E810EB5902FF001100', '7E82140001200400014', '7E82200400015004000', '7E82371004000870040', '7E82400880040008A00',
+            '7E82540008B00400096', '7E826004000CE004001', '7E82706004001110040', '7E82801160040013300', '7E82940013A00400171',
+            '7E82A00400172004002', '7E82B17004002340040', '7E82C02360040029800', '7E82D40029900400325', '7E82E00400327004003',
+            '7E82F28004004200040', '7E82005050050054400', '7E8214005460040059F', '7E82200400812004010', '7E82301005010250050',
+            '7E82410260040111600', '7E82550112400501127', '7E82600501137005011', '7E827380050115E0040', '7E82812850040129900',
+            '7E82940130D00401397', '7E82A00501464005015', '7E82B010050160A0050', '7E82C20960040209700', '7E82D40222700402270',
+            '7E82E00402271004024', '7E82F530040246C0040', '7E820250F004025B000', '7E82140261000400000'
+        ].join('\r');
+        const [message] = parseResponse(raw, 'can11');
+        const { dtcs, ignored } = decodeUdsDtcs(message.data);
+        expect(dtcs).toEqual([]);
+        expect(ignored).toBe(58);
+    });
+
+    it('does not count unsorted codes from old scans as faults', () => {
+        const old = {
+            ...({} as ScanResult),
+            mil: false,
+            monitors: [],
+            stored: [],
+            pending: [],
+            permanent: [],
+            distanceSinceClear: null,
+            warmupsSinceClear: null,
+            distanceWithMil: null,
+            full: true,
+            modules: [{ id: '0x7E0', name: 'Moteur (PCM)', protocol: 'UDS', partNumber: null, dtcs: [{ code: 'P0420-00', description: '', status: 'mémorisé' }] }]
+        } as ScanResult;
+        const titles = analyzeScan(old).map((f) => f.title);
+        expect(titles).toContain('Refaites un scan pour les autres calculateurs');
+        expect(titles.some((t) => t.startsWith('Moteur (PCM)'))).toBe(false);
     });
 
     it('decodes KWP records', () => {
@@ -89,7 +145,7 @@ describe('full scan — UDS (citadine)', () => {
         expect(result.odometerObd).toBeCloseTo(48230.5);
         expect(result.mode06!.find((t) => t.mid === 0x21)!.passed).toBe(false);
         const titles = analyzeScan(result, 48230).map((f) => f.title);
-        expect(titles).toContain('ABS ESP BOSCH 9.3 : 1 code défaut');
+        expect(titles).toContain('ABS ESP BOSCH 9.3 : 1 défaut');
         expect(titles).toContain('1 autotest détaillé hors limites');
         expect(titles).not.toContain('Kilométrage incohérent');
     }, 20000);
@@ -125,7 +181,8 @@ describe('user clear', () => {
 
 describe('full scan — Ford (Puma flexifuel)', () => {
     it('names Ford modules, reads ethanol support and mileage', async () => {
-        const { elm } = await connectedSim('puma');
+        const { sim, elm } = await connectedSim('puma');
+        sim.canErrorOnce = true;
         const result = await runScan(elm, undefined, true);
         expect(result.modules!.map((m) => m.name)).toEqual([
             'Passerelle (GWM)',
@@ -139,6 +196,8 @@ describe('full scan — Ford (Puma flexifuel)', () => {
         expect(guessFuel(result)).toBe('ethanol');
         expect(result.odometerObd).toBeCloseTo(21780.4);
         expect(analyzeScan(result, 21780)[0].title).toBe('Aucun défaut détecté');
+        expect(result.modules!.find((m) => m.name === 'Moteur (PCM)')!.ignored).toBe(2);
+        expect(result.modules!.find((m) => m.name === 'Boîtier habitacle (BCM)')!.dtcs).toEqual([]);
     }, 20000);
 });
 

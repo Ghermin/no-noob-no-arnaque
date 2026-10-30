@@ -33,6 +33,8 @@ onMounted(async () => {
     loaded.value = true;
 });
 
+const noPidList = computed(() => scan.value !== null && scan.value.result.supportedPids.length === 0);
+
 const findings = computed(() => (scan.value ? analyzeScan(scan.value.result, scan.value.odometer, userClear.value !== null) : []));
 
 async function remove(): Promise<void> {
@@ -90,8 +92,8 @@ function printPage(): void {
         <template v-if="scan.result.full">
             <h2>Autres calculateurs</h2>
             <p class="small muted">
-                Codes défaut des calculateurs autres que le moteur. Les descriptions des codes propres à chaque constructeur sont parfois
-                indisponibles : notez le code et cherchez-le avec la marque de la voiture.
+                Défauts signalés par les autres boîtiers électroniques (habitacle, freins, multimédia…). Quand un code est propre à la
+                marque, notez-le et cherchez-le avec le nom de la voiture, ou demandez au garage ce qu'il signifie.
             </p>
             <ModuleList v-if="scan.result.modules?.length" :modules="scan.result.modules" />
             <p v-else class="card small muted">
@@ -100,7 +102,10 @@ function printPage(): void {
             </p>
 
             <h2>Autotests détaillés (mode 06)</h2>
-            <p class="small muted">Valeurs mesurées par la voiture pendant ses autotests, comparées à ses propres limites.</p>
+            <p class="small muted">
+                En roulant, la voiture mesure elle-même ses sondes, son catalyseur, ses ratés de combustion… et compare chaque mesure à ses
+                propres limites. « OK » : la mesure est dans les limites. Touchez un système pour voir les valeurs.
+            </p>
             <Mode06List v-if="scan.result.mode06?.length" :tests="scan.result.mode06" />
             <p v-else class="card small muted">Non fourni par cette voiture.</p>
 
@@ -120,7 +125,8 @@ function printPage(): void {
                 </div>
             </div>
             <p v-if="scan.result.odometerObd == null" class="small muted">
-                Le kilométrage OBD n'est fourni que par les voitures récentes (environ 2019 et après).
+                <template v-if="noPidList">Non lu pendant ce scan : refaites un scan pour l'obtenir.</template>
+                <template v-else>Le kilométrage OBD n'est fourni que par les voitures récentes (environ 2019 et après).</template>
             </p>
             <p v-for="note in scan.result.notes ?? []" :key="note" class="small notice warning">{{ note }}</p>
         </template>
@@ -144,7 +150,11 @@ function printPage(): void {
                 <div class="label">Parcourus voyant allumé</div>
             </div>
         </div>
-        <p class="small muted">« — » : information non fournie par cette voiture. Les compteurs plafonnent (65 535 km, 255 démarrages).</p>
+        <p v-if="noPidList" class="small notice warning">
+            La voiture n'a pas donné la liste de ses informations disponibles pendant ce scan (souvent un bus pas encore réveillé) : ces
+            compteurs n'ont pas pu être lus. Refaites un scan pour les obtenir.
+        </p>
+        <p v-else class="small muted">« — » : information non fournie par cette voiture. Les compteurs plafonnent (65 535 km, 255 démarrages).</p>
 
         <h2>Autotests (moniteurs)</h2>
         <p class="small muted">

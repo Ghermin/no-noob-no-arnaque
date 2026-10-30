@@ -29,12 +29,16 @@ function timedReader(reader: ReadableStreamDefaultReader<Uint8Array>): ProbeRead
     };
 }
 
-async function probe(port: SerialPort, baudRate: number): Promise<ReadableStreamDefaultReader<Uint8Array> | null> {
+async function probe(port: SerialPort, baudRate: number, usbPort: boolean): Promise<ReadableStreamDefaultReader<Uint8Array> | null> {
     try {
         await port.open({ baudRate });
     } catch (error) {
         logLine('!', `série ${baudRate} bauds : ouverture impossible ${(error as Error).name}: ${(error as Error).message}`);
-        throw new Error("Impossible d'ouvrir ce port : il est peut-être utilisé par un autre onglet ou logiciel OBD. Fermez-les, débranchez et rebranchez le câble, puis réessayez.");
+        throw new Error(
+            usbPort
+                ? "Impossible d'ouvrir le câble : il est peut-être déjà utilisé par un autre onglet ou un logiciel OBD. Fermez-les, débranchez et rebranchez le câble, puis réessayez."
+                : "Ce port n'est pas le câble OBD (c'est sans doute une liaison Bluetooth de Windows). Réessayez et choisissez dans la liste le port dont le nom contient « USB »."
+        );
     }
     const reader = port.readable!.getReader();
     const writer = port.writable!.getWriter();
@@ -70,7 +74,7 @@ export async function connectSerial(): Promise<Transport> {
 
     let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
     for (const baudRate of BAUD_RATES) {
-        reader = await probe(port, baudRate);
+        reader = await probe(port, baudRate, portInfo.usbVendorId !== undefined);
         if (reader) break;
     }
     if (!reader) {
