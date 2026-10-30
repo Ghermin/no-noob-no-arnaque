@@ -31,12 +31,21 @@ const KNOWN_NAMES: Record<string, Record<number, string>> = {
     ford: {
         0x7e0: 'Moteur (PCM)',
         0x7e1: 'Boîte de vitesses (TCM)',
+        0x7e4: 'Batterie hybride (BECM)',
+        0x706: 'Caméra avant (IPMA)',
         0x716: 'Passerelle (GWM)',
         0x720: 'Tableau de bord (IPC)',
+        0x724: 'Commodos au volant (SCCM)',
         0x726: 'Boîtier habitacle (BCM)',
+        0x727: 'Audio (ACM)',
         0x730: 'Direction assistée (PSCM)',
+        0x733: 'Climatisation (HVAC)',
+        0x736: 'Aide au stationnement (PAM)',
         0x737: 'Airbag (RCM)',
+        0x740: 'Porte conducteur (DDM)',
+        0x741: 'Porte passager (PDM)',
         0x760: 'ABS / ESP',
+        0x764: 'Régulateur adaptatif / radar (CCM)',
         0x7d0: 'Multimédia (APIM / SYNC)'
     },
     gm: {
@@ -69,22 +78,44 @@ function isNegative(message: EcuMessage | undefined, service: number): boolean {
     return !!message && message.data[0] === 0x7f && message.data[1] === service;
 }
 
-export function decodeUdsDtcs(data: number[]): ExtDtc[] {
+// Octet de statut UDS (ISO 14229). Beaucoup de calculateurs (Ford notamment) listent tous leurs codes avec
+// seulement « test pas encore fait » (0x40, 0x50) : ce ne sont pas des défauts.
+const UDS_TEST_FAILED = 0x01;
+const UDS_PENDING = 0x04;
+const UDS_CONFIRMED = 0x08;
+const UDS_FAILED_SINCE_CLEAR = 0x20;
+const UDS_WARNING_LAMP = 0x80;
+
+function udsStates(status: number): string[] {
+    const states: string[] = [];
+    if (status & UDS_TEST_FAILED) states.push('présent en ce moment');
+    if (status & UDS_CONFIRMED) states.push('confirmé');
+    if (status & UDS_PENDING) states.push('en attente de confirmation');
+    if (status & UDS_WARNING_LAMP) states.push("allume un voyant");
+    if (states.length === 0 && status & UDS_FAILED_SINCE_CLEAR) states.push("survenu depuis le dernier effacement, absent aujourd'hui");
+    return states;
+}
+
+export function decodeUdsDtcs(data: number[]): { dtcs: ExtDtc[]; ignored: number } {
     const dtcs: ExtDtc[] = [];
+    let ignored = 0;
     for (let i = 3; i + 4 <= data.length; i += 4) {
         const [a, b, ftb, status] = data.slice(i, i + 4);
+        if ((a | b | ftb) === 0 || (a & b & ftb) === 0xff) continue;
+        const states = udsStates(status);
+        if (states.length === 0) {
+            ignored++;
+            continue;
+        }
         const base = decodeDtcBytes(a, b);
-        const states: string[] = [];
-        if (status & 0x01) states.push('actif');
-        if (status & 0x04) states.push('en attente');
-        if (status & 0x08) states.push('confirmé');
         dtcs.push({
             code: `${base}-${ftb.toString(16).toUpperCase().padStart(2, '0')}`,
             description: describeDtc(base).description,
-            status: states.join(', ') || 'mémorisé'
+            status: states.join(' · '),
+            history: (status & (UDS_TEST_FAILED | UDS_PENDING | UDS_CONFIRMED | UDS_WARNING_LAMP)) === 0
         });
     }
-    return dtcs;
+    return { dtcs, ignored };
 }
 
 export function decodeKwpDtcs(data: number[]): ExtDtc[] {
@@ -158,14 +189,17 @@ async function readEcu(elm: Elm327, tx: number, rx: number, family: keyof typeof
     await elm.tryCommands(['ATCAF1', 'ATST64', `ATSH${hex3(tx)}`, `ATCRA${hex3(rx)}`, `ATFCSH${hex3(tx)}`, 'ATFCSD300000', 'ATFCSM1']);
 
     const name = (await elm.query('22F197')).find((m) => m.data[0] === 0x62);
-    const part = (await elm.query('22F187')).find((m) => m.data[0] === 0x62);
+    let part = (await elm.query('22F187')).find((m) => m.data[0] === 0x62);
+    // Ford ne répond pas à F187 : sa référence pièce est dans F113.
+    if (!part && family === 'ford') part = (await elm.query('22F113')).find((m) => m.data[0] === 0x62);
     let protocol = 'UDS';
     let dtcs: ExtDtc[] = [];
+    let ignored = 0;
 
     let response = (await elm.query('1902FF', 5000))[0];
     if (isNegative(response, 0x19) && response.data[2] === 0x78) response = (await elm.query('1902FF', 5000))[0];
     if (response?.data[0] === 0x59) {
-        dtcs = decodeUdsDtcs(response.data);
+        ({ dtcs, ignored } = decodeUdsDtcs(response.data));
     } else {
         const kwp = (await elm.query('1802FF00', 5000))[0];
         if (kwp?.data[0] === 0x58) {
@@ -184,10 +218,11 @@ async function readEcu(elm: Elm327, tx: number, rx: number, family: keyof typeof
 
     return {
         id: `0x${hex3(tx)}`,
-        name: (name && ascii(name.data.slice(3))) || KNOWN_NAMES[family][tx] || KNOWN_NAMES.generic[tx] || `Calculateur 0x${hex3(tx)}`,
+        name: (name && ascii(name.data.slice(3))) || KNOWN_NAMES[family][tx] || KNOWN_NAMES.generic[tx] || `Calculateur non identifié (0x${hex3(tx)})`,
         protocol,
         partNumber: part ? ascii(part.data.slice(3)) || null : null,
-        dtcs
+        dtcs,
+        ...(ignored ? { ignored } : {})
     };
 }
 

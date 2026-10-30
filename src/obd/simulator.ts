@@ -98,6 +98,8 @@ export class Simulator {
     private header = '7DF';
     private caf = true;
     private channelSeq: Record<number, number> = {};
+    /** Simule le « CAN ERROR » d'un bus qui se réveille, à la prochaine requête 0100. */
+    canErrorOnce = false;
 
     constructor(readonly profile: DemoProfile = 'ibiza') {
         this.state = this.initialState();
@@ -302,10 +304,11 @@ export class Simulator {
             return {
                 0x716: { rx: 0x71e, name: null, part: 'L1BT-14F642-AD', dtcs: () => [] },
                 0x720: { rx: 0x728, name: null, part: 'L1BT-10849-GBG', dtcs: () => [] },
-                0x726: { rx: 0x72e, name: null, part: 'L1BT-14A067-CF', dtcs: () => [] },
+                // Comme une vraie Puma : des codes listés avec le seul statut « test pas encore fait », plus un enregistrement de remplissage.
+                0x726: { rx: 0x72e, name: null, part: 'L1BT-14A067-CF', dtcs: () => [[0x92, 0x54, 0x51, 0x40], [0xff, 0xff, 0xff, 0x40]] },
                 0x737: { rx: 0x73f, name: null, part: 'L1BT-14B321-AD', dtcs: () => [] },
                 0x760: { rx: 0x768, name: null, part: 'L1BC-2D053-AF', dtcs: () => [] },
-                0x7e0: { rx: 0x7e8, name: null, part: 'NU5A-12A650-BB', dtcs: () => [] }
+                0x7e0: { rx: 0x7e8, name: null, part: 'NU5A-12A650-BB', dtcs: () => [[0x00, 0x11, 0x00, 0x40], [0x04, 0x20, 0x00, 0x50]] }
             };
         }
         if (this.profile === 'captiva') {
@@ -428,6 +431,10 @@ export class Simulator {
         }
         if (cmd.startsWith('AT')) return 'OK';
         if (!/^[0-9A-F]+$/.test(cmd)) return '?';
+        if (cmd === '0100' && this.canErrorOnce) {
+            this.canErrorOnce = false;
+            return 'CAN ERROR';
+        }
         const gm = this.udsEcus()[parseInt(this.header, 16)];
         if (!this.caf && gm?.gmlan) {
             if (cmd !== '03A981FF') return 'NO DATA';

@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue';
 import { navigate, state } from '../store';
 import { db } from '../storage';
-import { compareScans } from '../analysis';
+import { compareScans, moduleFaultCount } from '../analysis';
 import { formatDate } from '../format';
 import { SCAN_LABELS, type SavedScan } from '../types';
 import FindingList from '../components/FindingList.vue';
@@ -52,9 +52,9 @@ const rows = computed(() => {
             after: a.odometerObd != null ? Math.round(a.odometerObd) : '—'
         },
         {
-            label: 'Codes autres calculateurs',
-            before: b.full ? (b.modules ?? []).reduce((n, m) => n + m.dtcs.length, 0) : 'non lu',
-            after: a.full ? (a.modules ?? []).reduce((n, m) => n + m.dtcs.length, 0) : 'non lu'
+            label: 'Défauts autres calculateurs',
+            before: b.full ? moduleFaultCount(b) : 'non lu',
+            after: a.full ? moduleFaultCount(a) : 'non lu'
         }
     ];
 });

@@ -5,7 +5,11 @@ import type { Dtc } from '../types';
 
 const props = defineProps<{ title: string; hint: string; dtcs: Dtc[] }>();
 
-const items = computed(() => props.dtcs.map((d) => ({ ...describeDtc(d.code), ecu: d.ecu })));
+const ECU_NAMES: Record<string, string> = { '7E8': 'calculateur moteur', '7E9': 'calculateur de boîte de vitesses' };
+
+const items = computed(() =>
+    props.dtcs.map((d) => ({ ...describeDtc(d.code), ecu: d.ecu, ecuName: ECU_NAMES[d.ecu.toUpperCase()] ?? `calculateur ${d.ecu}` }))
+);
 </script>
 
 <template>
@@ -19,10 +23,10 @@ const items = computed(() => props.dtcs.map((d) => ({ ...describeDtc(d.code), ec
             <li v-for="item in items" :key="item.code + item.ecu">
                 <div class="spread">
                     <span class="code">{{ item.code }}</span>
-                    <span class="badge">{{ item.manufacturerSpecific ? 'Constructeur' : 'Générique' }}</span>
+                    <span class="badge">{{ item.manufacturerSpecific ? 'Propre à la marque' : 'Standard' }}</span>
                 </div>
                 <div>{{ item.description }}</div>
-                <div class="small muted">{{ item.system }} · calculateur {{ item.ecu }}</div>
+                <div class="small muted">{{ item.system }} · signalé par le {{ item.ecuName }}</div>
             </li>
         </ul>
     </section>
