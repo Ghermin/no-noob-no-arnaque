@@ -4,7 +4,6 @@ import { connectBluetooth } from './obd/transport';
 import { connectSerial, isWebSerialAvailable } from './obd/serial';
 import { connectUsb } from './obd/usb';
 import { logLine } from './obd/log';
-import { Simulator, createSimulatorTransport, type DemoProfile } from './obd/simulator';
 import { db } from './storage';
 import type { Vehicle } from './types';
 
@@ -17,7 +16,6 @@ export type Route =
     | { name: 'live'; vehicleId: string | null };
 
 export const elm = shallowRef<Elm327 | null>(null);
-export const simulator = shallowRef<Simulator | null>(null);
 
 export const state = reactive({
     route: { name: 'home' } as Route,
@@ -49,18 +47,14 @@ export async function refreshVehicles(): Promise<void> {
     state.vehicles = await db.vehicles();
 }
 
-export async function connect(kind: 'bluetooth' | 'usb' | 'demo', profile: DemoProfile = 'ibiza'): Promise<boolean> {
+export async function connect(kind: 'bluetooth' | 'usb'): Promise<boolean> {
     state.connecting = true;
     state.connectionError = '';
     let instance: Elm327 | null = null;
     try {
         await disconnect();
         let transport;
-        if (kind === 'demo') {
-            const sim = new Simulator(profile);
-            simulator.value = sim;
-            transport = createSimulatorTransport(sim);
-        } else if (kind === 'usb') {
+        if (kind === 'usb') {
             transport = isWebSerialAvailable() ? await connectSerial() : await connectUsb();
         } else {
             transport = await connectBluetooth();
@@ -68,10 +62,7 @@ export async function connect(kind: 'bluetooth' | 'usb' | 'demo', profile: DemoP
         const created = new Elm327(transport);
         instance = created;
         created.onDisconnect(() => {
-            if (elm.value === created) {
-                elm.value = null;
-                simulator.value = null;
-            }
+            if (elm.value === created) elm.value = null;
         });
         await created.initialize();
         elm.value = created;
@@ -80,7 +71,6 @@ export async function connect(kind: 'bluetooth' | 'usb' | 'demo', profile: DemoP
         const error = e as Error;
         logLine('!', `connexion ${kind} échouée : ${error.name}: ${error.message}`);
         state.connectionError = error.name === 'NotFoundError' ? '' : error.message;
-        simulator.value = null;
         if (instance) await instance.close().catch(() => undefined);
         return false;
     } finally {
@@ -91,6 +81,5 @@ export async function connect(kind: 'bluetooth' | 'usb' | 'demo', profile: DemoP
 export async function disconnect(): Promise<void> {
     const current = elm.value;
     elm.value = null;
-    simulator.value = null;
     if (current) await current.close();
 }
