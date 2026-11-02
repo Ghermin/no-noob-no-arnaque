@@ -19,7 +19,8 @@
     color-scheme: light;
 }
 
-@media (prefers-color-scheme: dark) {
+/* Thème sombre automatique à l'écran ; l'impression / PDF garde toujours le thème clair. */
+@media screen and (prefers-color-scheme: dark) {
     :root {
         --bg: #0b1120;
         --surface: #131b2e;

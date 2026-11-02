@@ -13,7 +13,8 @@ Diagnostic OBD-II directement dans le navigateur, pour vérifier ce que dit le g
   est toujours là, ou si les codes ont seulement été effacés.
 - **Scan complet** :
   - lit aussi les **autres calculateurs** (ABS, airbag, tableau de bord…) : recherche automatique en UDS / KWP2000 sur CAN, tous
-    constructeurs ;
+    constructeurs. Seuls les vrais défauts sont affichés : les codes dont le test n'a jamais échoué (fréquents chez Ford) sont
+    écartés, les défauts passés sont signalés à part ;
   - pour les VAG d'avant 2013 (Seat, VW, Škoda, Audi), protocole **TP2.0**, *expérimental* ;
   - pour les GM (Chevrolet, Daewoo, Opel), calculateurs **GMLAN**, *expérimental* ;
   - noms des calculateurs connus pour VAG, Renault, Ford et GM ;
@@ -25,6 +26,9 @@ Diagnostic OBD-II directement dans le navigateur, pour vérifier ce que dit le g
   Le taux d'éthanol est affiché pour les flexifuel.
 - **Efface les codes moteur** à la demande, après un scan de sauvegarde automatique, pour vérifier si un défaut revient.
 - **Journal technique** exportable pour signaler un problème avec une voiture ou un adaptateur.
+- **Prise en main en 3 étapes** (brancher, mettre le contact, connecter), puis le diagnostic s'ouvre directement.
+- **Thème clair ou sombre automatique**, selon le réglage du téléphone ou de l'ordinateur. Les rapports imprimés ou en PDF restent
+  en clair.
 
 Tout reste dans le navigateur : pas de compte, pas de serveur, aucune donnée envoyée.
 
@@ -91,7 +95,8 @@ Le déploiement sur GitHub Pages est automatique à chaque push sur `main` (`.gi
 - [x] Carburant éthanol (E85) et taux d'éthanol
 - [x] Effacement des codes moteur avec suivi « revenu / pas revenu »
 - [x] Câble OBD USB sur ordinateur (Web Serial) et sur téléphone Android (WebUSB)
-- [ ] Valider TP2.0, GMLAN et UDS sur de vraies voitures (journaux bienvenus)
+- [x] UDS validé sur une vraie voiture (Ford Puma mHEV, câble USB FTDI)
+- [ ] Valider TP2.0 et GMLAN sur de vraies voitures (journaux bienvenus)
 - [ ] Réseaux secondaires Ford MS-CAN / GM SW-CAN (adaptateurs compatibles)
 - [ ] Bus CAN 29 bits
 - [ ] Davantage de descriptions de codes constructeur
