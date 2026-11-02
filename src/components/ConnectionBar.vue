@@ -34,7 +34,6 @@ const connected = computed(() => elm.value !== null);
                     </button>
                     <button v-if="usb" class="small-btn primary" title="Câble OBD USB" @click="connect('usb')">USB</button>
                 </template>
-                <button class="small-btn" :disabled="state.connecting" @click="connect('demo')">Démo</button>
             </div>
         </div>
         <div v-if="state.connectionError" class="inner">

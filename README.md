@@ -24,11 +24,6 @@ Diagnostic OBD-II directement dans le navigateur, pour vérifier ce que dit le g
 - **Affiche les données en direct**, filtrées selon le moteur (diesel, essence, éthanol E85…) et ce que la voiture prend en charge.
   Le taux d'éthanol est affiché pour les flexifuel.
 - **Efface les codes moteur** à la demande, après un scan de sauvegarde automatique, pour vérifier si un défaut revient.
-- **Mode démo** avec quatre voitures simulées, dont des scénarios garage et compteur trafiqué :
-  - Ibiza diesel (VAG TP2.0) ;
-  - citadine essence (UDS) ;
-  - Ford Puma E85 (UDS) ;
-  - Chevrolet Captiva (GMLAN / KWP).
 - **Journal technique** exportable pour signaler un problème avec une voiture ou un adaptateur.
 
 Tout reste dans le navigateur : pas de compte, pas de serveur, aucune donnée envoyée.
@@ -62,7 +57,7 @@ Compatible avec toute voiture équipée de l'OBD-II / EOBD : en Europe, les esse
 
 ```bash
 npm install
-npm run dev     # serveur local (utilisez le bouton « Démo » sans adaptateur)
+npm run dev     # serveur local
 npm test        # tests unitaires du décodage OBD
 npm run build
 ```
@@ -84,7 +79,7 @@ Le déploiement sur GitHub Pages est automatique à chaque push sur `main` (`.gi
 | `src/obd/modules.ts` | Recherche des calculateurs et lecture des codes (UDS 0x19, KWP 0x18) |
 | `src/obd/vag.ts` | Canal VAG TP2.0, codes VAG, blocs de mesure (kilométrage du tableau de bord) |
 | `src/obd/log.ts` | Journal technique des échanges avec l'adaptateur |
-| `src/obd/simulator.ts` | Voitures simulées pour le mode démo (OBD, UDS, TP2.0) |
+| `src/obd/simulator.ts` | Voitures simulées utilisées par les tests (OBD, UDS, TP2.0, GMLAN) |
 | `src/analysis.ts` | Analyse « anti-arnaque » d'un scan et comparaison de deux scans |
 
 ## Feuille de route

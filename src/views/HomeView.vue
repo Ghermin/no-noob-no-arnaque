@@ -84,7 +84,6 @@ async function importBackup(event: Event): Promise<void> {
         <strong>Bluetooth indisponible dans ce navigateur.</strong>
         <p class="small">
             Utilisez <strong>Chrome</strong> ou <strong>Edge</strong> sur Android ou sur ordinateur. iPhone et Firefox ne gèrent pas Web Bluetooth.
-            Vous pouvez quand même essayer le <strong>mode Démo</strong>.
         </p>
     </div>
 
@@ -103,7 +102,6 @@ async function importBackup(event: Event): Promise<void> {
             sur <strong>USB</strong>. La vitesse du câble est détectée automatiquement. Puces prises en charge sur téléphone : FTDI, CH340, CP2102
             et USB standard (CDC).
         </p>
-        <p class="small muted">Pas d'adaptateur ? Appuyez sur <strong>Démo</strong> pour essayer avec une voiture simulée.</p>
     </div>
 
     <div v-else class="card">

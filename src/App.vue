@@ -2,7 +2,6 @@
 import { onMounted } from 'vue';
 import { initNavigation, refreshVehicles, state } from './store';
 import ConnectionBar from './components/ConnectionBar.vue';
-import DemoPanel from './components/DemoPanel.vue';
 import Disclaimer from './components/Disclaimer.vue';
 import HomeView from './views/HomeView.vue';
 import VehicleView from './views/VehicleView.vue';
@@ -20,7 +19,6 @@ onMounted(() => {
 <template>
     <ConnectionBar />
     <main>
-        <DemoPanel />
         <HomeView v-if="state.route.name === 'home'" />
         <VehicleView v-else-if="state.route.name === 'vehicle'" :key="state.route.id" :vehicle-id="state.route.id" />
         <ScanView v-else-if="state.route.name === 'scan'" :vehicle-id="state.route.vehicleId" />
