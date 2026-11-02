@@ -20,7 +20,7 @@ const connected = computed(() => elm.value !== null);
                 <span class="badge ok" :title="elm?.protocolName">● {{ elm?.name }}</span>
                 <button class="small-btn" @click="disconnect()">Déconnecter</button>
             </div>
-            <div v-else class="row">
+            <div v-else-if="state.route.name !== 'home'" class="row">
                 <span v-if="state.connecting" class="small muted">Connexion…</span>
                 <template v-else>
                     <button
@@ -36,7 +36,7 @@ const connected = computed(() => elm.value !== null);
                 </template>
             </div>
         </div>
-        <div v-if="state.connectionError" class="inner">
+        <div v-if="state.connectionError && state.route.name !== 'home'" class="inner">
             <p class="error small">{{ state.connectionError }}</p>
         </div>
     </header>

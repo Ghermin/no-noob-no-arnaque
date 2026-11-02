@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
-import { elm, navigate, refreshVehicles, state } from '../store';
+import { connect, elm, navigate, refreshVehicles, state } from '../store';
 import { db, newId } from '../storage';
 import { isWebBluetoothAvailable } from '../obd/transport';
 import { isWebSerialAvailable } from '../obd/serial';
@@ -35,6 +35,11 @@ async function addVehicle(vehicle: Vehicle): Promise<void> {
     await refreshVehicles();
     adding.value = false;
     navigate({ name: 'vehicle', id: vehicle.id });
+}
+
+// Une fois connecté, on enchaîne directement sur le diagnostic.
+async function start(kind: 'bluetooth' | 'usb'): Promise<void> {
+    if (await connect(kind)) navigate({ name: 'scan', vehicleId: null });
 }
 
 async function exportBackup(): Promise<void> {
@@ -72,101 +77,195 @@ async function importBackup(event: Event): Promise<void> {
 </script>
 
 <template>
-    <section>
-        <h1>Vérifiez ce que dit le garagiste</h1>
-        <p>
-            Branchez un adaptateur OBD Bluetooth sur votre voiture et lisez vous-même les codes défaut, l'état des autotests et les traces d'un
-            effacement récent des codes. Faites un scan avant et après le garage pour comparer.
-        </p>
+    <section class="hero">
+        <h1>Diagnostiquez votre voiture vous-même</h1>
+        <p class="muted">Codes défaut, voyant, effacement suspect : vérifiez avant ou après le garage. Gratuit, sans compte.</p>
     </section>
 
-    <div v-if="!bluetooth && !serial" class="notice warning">
-        <strong>Bluetooth indisponible dans ce navigateur.</strong>
-        <p class="small">
-            Utilisez <strong>Chrome</strong> ou <strong>Edge</strong> sur Android ou sur ordinateur. iPhone et Firefox ne gèrent pas Web Bluetooth.
-        </p>
-    </div>
-
-    <div v-if="!connected" class="card">
-        <h3>Pour commencer</h3>
-        <ol class="small steps">
-            <li>
-                Procurez-vous un adaptateur <strong>ELM327 en Bluetooth 4.0 (BLE)</strong> ou un <strong>câble OBD USB</strong>. Les modèles en
-                Bluetooth « classique » ne marchent pas dans un navigateur.
-            </li>
-            <li>Branchez-le sur la prise OBD, en général sous le volant, et mettez le contact.</li>
-            <li>Appuyez sur <strong>{{ serial && bluetooth ? 'Bluetooth' : 'Connecter' }}</strong> en haut et choisissez l'adaptateur.</li>
-        </ol>
-        <p v-if="serial" class="small">
-            <strong>Câble USB</strong> (ELM327 USB, OBDLink SX / EX) : branchez-le, sur un téléphone avec un adaptateur USB-C (OTG), puis appuyez
-            sur <strong>USB</strong>. La vitesse du câble est détectée automatiquement. Puces prises en charge sur téléphone : FTDI, CH340, CP2102
-            et USB standard (CDC).
-        </p>
-    </div>
-
-    <div v-else class="card">
-        <h3>Adaptateur connecté</h3>
+    <div v-if="connected" class="card start">
+        <h2>Adaptateur connecté</h2>
         <p class="small muted">{{ elm?.protocolName }}</p>
         <div class="row">
-            <button class="primary" @click="navigate({ name: 'scan', vehicleId: null })">Lancer un scan</button>
+            <button class="primary big" @click="navigate({ name: 'scan', vehicleId: null })">Lancer le diagnostic</button>
             <button @click="navigate({ name: 'live', vehicleId: null })">Données en direct</button>
         </div>
     </div>
 
-    <div class="spread">
-        <h2>Mon garage</h2>
-        <button v-if="!adding" class="link" @click="adding = true">+ Ajouter un véhicule</button>
+    <div v-else class="card start">
+        <ol class="steps">
+            <li>
+                <strong>Branchez l'adaptateur OBD</strong>
+                <span class="muted">sur la prise sous le volant.</span>
+            </li>
+            <li>
+                <strong>Mettez le contact</strong>
+                <span class="muted">ou démarrez le moteur.</span>
+            </li>
+            <li>
+                <strong>Connectez-le</strong>
+                <div v-if="bluetooth || serial" class="row actions">
+                    <button v-if="bluetooth" class="primary big" :disabled="state.connecting" @click="start('bluetooth')">
+                        {{ serial ? 'Adaptateur Bluetooth' : "Connecter l'adaptateur" }}
+                    </button>
+                    <button v-if="serial" class="big" :class="{ primary: !bluetooth }" :disabled="state.connecting" @click="start('usb')">
+                        Câble USB
+                    </button>
+                </div>
+                <p v-else class="notice warning small">
+                    Ce navigateur ne sait pas parler à un adaptateur. Ouvrez cette page dans <strong>Chrome</strong> ou <strong>Edge</strong>, sur
+                    Android ou sur ordinateur (pas sur iPhone).
+                </p>
+                <p v-if="state.connecting" class="small muted status" role="status">Connexion en cours…</p>
+                <p v-else-if="state.connectionError" class="small error" role="alert">{{ state.connectionError }}</p>
+            </li>
+        </ol>
+        <p class="small muted next">Le diagnostic se lance ensuite en un clic.</p>
+
+        <details class="small">
+            <summary>Pas encore d'adaptateur ?</summary>
+            <p>
+                Il faut un adaptateur <strong>ELM327 Bluetooth 4.0 (BLE)</strong> ou un <strong>câble OBD USB</strong>, vendus à petit prix. Évitez
+                les modèles en Bluetooth « classique » : un navigateur ne peut pas s'y connecter. Sur téléphone, un câble USB se branche avec un
+                adaptateur USB-C (OTG).
+            </p>
+        </details>
     </div>
 
-    <div v-if="adding" class="card">
-        <VehicleForm :vehicle="blankVehicle()" submit-label="Ajouter" @submit="addVehicle" @cancel="adding = false" />
-    </div>
-
-    <p v-if="state.vehicles.length === 0 && !adding" class="muted small">
-        Aucun véhicule pour l'instant. Il sera créé automatiquement au premier scan (reconnu par son VIN), ou ajoutez-le à la main.
-    </p>
-
-    <button v-for="vehicle in state.vehicles" :key="vehicle.id" class="card vehicle" @click="navigate({ name: 'vehicle', id: vehicle.id })">
+    <template v-if="state.vehicles.length > 0 || adding">
         <div class="spread">
-            <div>
-                <div class="name">{{ vehicle.name }}</div>
-                <div class="small muted">{{ vehicleSubtitle(vehicle) }}</div>
+            <h2>Mon garage</h2>
+            <button v-if="!adding" class="link" @click="adding = true">+ Ajouter un véhicule</button>
+        </div>
+
+        <div v-if="adding" class="card">
+            <VehicleForm :vehicle="blankVehicle()" submit-label="Ajouter" @submit="addVehicle" @cancel="adding = false" />
+        </div>
+
+        <button v-for="vehicle in state.vehicles" :key="vehicle.id" class="card vehicle" @click="navigate({ name: 'vehicle', id: vehicle.id })">
+            <div class="spread">
+                <div>
+                    <div class="name">{{ vehicle.name }}</div>
+                    <div class="small muted">{{ vehicleSubtitle(vehicle) }}</div>
+                </div>
+                <span v-if="lastScans[vehicle.id]" class="badge" :class="worstSeverity(lastScans[vehicle.id]!.result, lastScans[vehicle.id]!.odometer)">
+                    {{ SEVERITY_LABELS[worstSeverity(lastScans[vehicle.id]!.result, lastScans[vehicle.id]!.odometer)] }}
+                </span>
             </div>
-            <span v-if="lastScans[vehicle.id]" class="badge" :class="worstSeverity(lastScans[vehicle.id]!.result, lastScans[vehicle.id]!.odometer)">
-                {{ SEVERITY_LABELS[worstSeverity(lastScans[vehicle.id]!.result, lastScans[vehicle.id]!.odometer)] }}
-            </span>
-        </div>
-        <div class="small muted">
-            {{ lastScans[vehicle.id] ? `Dernier scan : ${formatDate(lastScans[vehicle.id]!.date)}` : 'Jamais scanné' }}
-        </div>
-    </button>
+            <div class="small muted">
+                {{ lastScans[vehicle.id] ? `Dernier scan : ${formatDate(lastScans[vehicle.id]!.date)}` : 'Jamais scanné' }}
+            </div>
+        </button>
+    </template>
 
-    <h2>Sauvegarde</h2>
-    <p class="small muted">
-        Vos scans sont enregistrés uniquement dans ce navigateur. Exportez-les pour les garder ou les transférer sur un autre appareil.
-    </p>
-    <div class="row">
-        <button :disabled="state.vehicles.length === 0" @click="exportBackup">Exporter</button>
-        <label class="button import">
-            Importer
-            <input type="file" accept="application/json,.json" @change="importBackup" />
-        </label>
-    </div>
-    <p v-if="backupMessage" class="small" role="status">{{ backupMessage }}</p>
+    <details class="card more">
+        <summary>Sauvegarde et aide</summary>
+        <h3>Sauvegarde</h3>
+        <p class="small muted">Vos scans restent uniquement dans ce navigateur. Exportez-les pour les garder ou les transférer sur un autre appareil.</p>
+        <div class="row">
+            <button :disabled="state.vehicles.length === 0" @click="exportBackup">Exporter</button>
+            <label class="button import">
+                Importer
+                <input type="file" accept="application/json,.json" @change="importBackup" />
+            </label>
+            <button v-if="state.vehicles.length === 0 && !adding" class="link" @click="adding = true">+ Ajouter un véhicule à la main</button>
+        </div>
+        <p v-if="backupMessage" class="small" role="status">{{ backupMessage }}</p>
 
-    <h2>Un souci avec votre voiture ou votre adaptateur ?</h2>
-    <p class="small muted">
-        Le journal technique contient les échanges bruts avec l'adaptateur depuis l'ouverture de la page. Il contient le VIN de la voiture,
-        mais aucune autre donnée personnelle. Joignez-le à un signalement sur
-        <a href="https://github.com/Ghermin/no-noob-no-arnaque/issues" target="_blank" rel="noopener">GitHub</a>.
-    </p>
-    <button @click="exportJournal">Télécharger le journal technique</button>
+        <h3>Un souci avec votre voiture ou votre adaptateur ?</h3>
+        <p class="small muted">
+            Le journal technique contient les échanges avec l'adaptateur depuis l'ouverture de la page (dont le VIN, aucune autre donnée
+            personnelle). Joignez-le à un signalement sur
+            <a href="https://github.com/Ghermin/no-noob-no-arnaque/issues" target="_blank" rel="noopener">GitHub</a>.
+        </p>
+        <button @click="exportJournal">Télécharger le journal technique</button>
+    </details>
 </template>
 
 <style scoped>
+.hero p {
+    margin-bottom: 16px;
+}
+
+.start h2 {
+    margin-top: 0;
+}
+
 .steps {
-    padding-left: 20px;
-    margin: 0 0 8px;
+    list-style: none;
+    counter-reset: step;
+    padding: 0;
+    margin: 0;
+}
+
+.steps > li {
+    counter-increment: step;
+    position: relative;
+    padding: 0 0 16px 44px;
+    min-height: 32px;
+}
+
+.steps > li::before {
+    content: counter(step);
+    position: absolute;
+    left: 0;
+    top: -2px;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: var(--accent-text);
+    font-weight: 800;
+    display: grid;
+    place-items: center;
+}
+
+.steps strong {
+    display: block;
+}
+
+.actions {
+    margin-top: 10px;
+}
+
+.big {
+    min-height: 52px;
+    padding: 12px 20px;
+    font-size: 1.05rem;
+    flex: 1 1 200px;
+}
+
+.status,
+.error {
+    margin: 8px 0 0;
+}
+
+.error {
+    color: var(--danger);
+}
+
+.steps .notice {
+    margin: 8px 0 0;
+}
+
+.next {
+    margin: 0 0 12px 44px;
+}
+
+details summary {
+    cursor: pointer;
+    font-weight: 600;
+}
+
+details > p {
+    margin: 8px 0 0;
+}
+
+.more {
+    margin-top: 24px;
+}
+
+.more h3 {
+    margin-top: 16px;
 }
 
 .vehicle {
