@@ -8,13 +8,14 @@ import { isWebUsbAvailable } from '../obd/usb';
 const bluetooth = isWebBluetoothAvailable();
 const usb = isWebSerialAvailable() || isWebUsbAvailable();
 const connected = computed(() => elm.value !== null);
+const logo = `${import.meta.env.BASE_URL}icon.svg`;
 </script>
 
 <template>
     <header class="bar no-print">
         <div class="inner">
             <button class="brand link" @click="navigate({ name: 'home' })">
-                <span aria-hidden="true">🔧</span> No Noob No Arnaque
+                <img class="logo" :src="logo" alt="" width="28" height="28" /> No Noob No Arnaque
             </button>
             <div v-if="connected" class="row">
                 <span class="badge ok" :title="elm?.protocolName">● {{ elm?.name }}</span>
@@ -66,6 +67,14 @@ const connected = computed(() => elm.value !== null);
     font-weight: 800;
     color: var(--text);
     font-size: 1rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.logo {
+    display: block;
+    border-radius: 7px;
 }
 
 .small-btn {
