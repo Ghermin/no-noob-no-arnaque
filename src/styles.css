@@ -15,8 +15,17 @@
     --warning-bg: #fdf1dc;
     --danger: #b42318;
     --danger-bg: #fde8e6;
-    --radius: 12px;
+    --radius: var(--pg-radius);
     color-scheme: light;
+
+    /* Bandeau du Bored Dev Playground (src/playground.css) aux couleurs de l'appli */
+    --pg-bg: var(--bg);
+    --pg-surface: var(--surface);
+    --pg-surface-2: var(--surface-2);
+    --pg-text: var(--text);
+    --pg-muted: var(--muted);
+    --pg-line: var(--border);
+    --pg-accent: var(--accent);
 }
 
 /* Thème sombre automatique à l'écran ; l'impression / PDF garde toujours le thème clair. */
@@ -253,7 +262,7 @@ textarea {
 }
 
 .code {
-    font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+    font-family: var(--pg-mono);
     font-weight: 700;
 }
 
