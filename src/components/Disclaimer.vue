@@ -5,6 +5,7 @@
             voiture. Vos données restent sur cet appareil.
             <a href="https://github.com/Ghermin/no-noob-no-arnaque" target="_blank" rel="noopener">Code source</a>
         </p>
+        <a class="pg-sig" href="https://ghermin.github.io/">un projet du bored dev playground</a>
     </footer>
 </template>
 
