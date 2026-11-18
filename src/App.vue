@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted } from 'vue';
+import { onMounted, watchEffect } from 'vue';
 import { initNavigation, refreshVehicles, state } from './store';
 import ConnectionBar from './components/ConnectionBar.vue';
 import Disclaimer from './components/Disclaimer.vue';
@@ -9,6 +9,9 @@ import ScanView from './views/ScanView.vue';
 import ReportView from './views/ReportView.vue';
 import CompareView from './views/CompareView.vue';
 import LiveView from './views/LiveView.vue';
+
+// L'accueil prend la largeur des pages du playground, les écrans de diagnostic une colonne plus lisible.
+watchEffect(() => document.body.classList.toggle('is-tool', state.route.name !== 'home'));
 
 onMounted(() => {
     refreshVehicles();
@@ -30,6 +33,6 @@ onMounted(() => {
             :after-id="state.route.afterId"
         />
         <LiveView v-else-if="state.route.name === 'live'" :vehicle-id="state.route.vehicleId" />
-        <Disclaimer />
     </main>
+    <Disclaimer />
 </template>

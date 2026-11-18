@@ -1,53 +1,71 @@
+/* No Noob No Arnaque : les couleurs de l'icône (compteur ambre et orange) par-dessus le kit du playground. */
+
 :root {
-    --bg: #f6f7f9;
+    --bg: #fbf6ee;
     --surface: #ffffff;
-    --surface-2: #eef1f5;
-    --text: #0f172a;
-    --muted: #5b6577;
-    --border: #d9dee6;
-    --accent: #2453d6;
-    --accent-text: #ffffff;
-    --ok: #157f3b;
-    --ok-bg: #e5f5ea;
-    --info: #2453d6;
-    --info-bg: #e7eefc;
-    --warning: #9a5b00;
-    --warning-bg: #fdf1dc;
-    --danger: #b42318;
-    --danger-bg: #fde8e6;
+    --surface-2: #f5ecdf;
+    --text: #231810;
+    --muted: #6e5f50;
+    --border: #eadfce;
+    --accent: #b8430a;
+    --accent-2: #d9480f;
+
+    /* États du diagnostic : les seules couleurs en dehors de celles de l'icône, parce qu'elles portent un sens. */
+    --ok: #1c7a43;
+    --ok-bg: #e6f4e9;
+    --info: var(--muted);
+    --info-bg: var(--surface-2);
+    --warning: #8f5600;
+    --warning-bg: #fdf0d8;
+    --danger: #b3261e;
+    --danger-bg: #fce8e4;
+
     --radius: var(--pg-radius);
     color-scheme: light;
 
-    /* Bandeau du Bored Dev Playground (src/playground.css) aux couleurs de l'appli */
     --pg-bg: var(--bg);
     --pg-surface: var(--surface);
     --pg-surface-2: var(--surface-2);
     --pg-text: var(--text);
     --pg-muted: var(--muted);
     --pg-line: var(--border);
+    --pg-dot: rgba(35, 24, 16, 0.09);
     --pg-accent: var(--accent);
+    --pg-accent-2: var(--accent-2);
+    --pg-on-accent: #2a1204;
+    --pg-shadow: 0 1px 2px rgba(35, 24, 16, 0.04), 0 8px 24px -12px rgba(35, 24, 16, 0.12);
+    --pg-shadow-hover: 0 2px 4px rgba(35, 24, 16, 0.05), 0 22px 44px -18px color-mix(in srgb, #f2542d 40%, transparent);
+
+    /* Le dégradé de l'icône sur les boutons (texte foncé : le blanc serait illisible sur l'ambre) ; plus soutenu pour le texte sur fond clair. */
+    --pg-grad: linear-gradient(100deg, #ffb020, #f2542d);
+    --grad-text: linear-gradient(100deg, #d97706, #d9381e);
 }
 
 /* Thème sombre automatique à l'écran ; l'impression / PDF garde toujours le thème clair. */
 @media screen and (prefers-color-scheme: dark) {
     :root {
-        --bg: #0b1120;
-        --surface: #131b2e;
-        --surface-2: #1b2540;
-        --text: #e6eaf2;
-        --muted: #98a2b8;
-        --border: #2a3552;
-        --accent: #6d8eff;
-        --accent-text: #0b1120;
-        --ok: #5fd38b;
-        --ok-bg: #12301f;
-        --info: #8aa6ff;
-        --info-bg: #17254a;
-        --warning: #f2b75b;
-        --warning-bg: #352710;
-        --danger: #ff8a7d;
-        --danger-bg: #3a1714;
+        --bg: #13100c;
+        --surface: #1d1813;
+        --surface-2: #29221a;
+        --text: #f6efe6;
+        --muted: #b3a697;
+        --border: #352c22;
+        --accent: #ffb020;
+        --accent-2: #ff7a4d;
+
+        --ok: #6fd39a;
+        --ok-bg: #16301f;
+        --warning: #f6c267;
+        --warning-bg: #372a12;
+        --danger: #ff9184;
+        --danger-bg: #3d1a15;
+
         color-scheme: dark;
+
+        --pg-dot: rgba(246, 239, 230, 0.06);
+        --pg-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+        --pg-shadow-hover: 0 22px 48px -20px color-mix(in srgb, #f2542d 45%, transparent);
+        --grad-text: var(--pg-grad);
     }
 }
 
@@ -55,40 +73,50 @@
     box-sizing: border-box;
 }
 
-html,
-body {
-    margin: 0;
-    background: var(--bg);
-    color: var(--text);
-    font-family: var(--pg-font);
-    line-height: 1.5;
-    -webkit-text-size-adjust: 100%;
+body.is-tool {
+    --pg-max: 860px;
+}
+
+#app {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow-x: clip; /* le halo de l'accueil ne crée pas de défilement horizontal */
 }
 
 main {
-    max-width: 760px;
-    margin: 0 auto;
-    padding: 16px 16px 48px;
+    width: min(var(--pg-max), 100% - 32px);
+    margin-inline: auto;
+    padding-bottom: clamp(48px, 8vw, 88px);
+}
+
+.is-tool main {
+    padding-top: clamp(8px, 2vw, 20px);
 }
 
 h1,
 h2,
 h3 {
-    line-height: 1.25;
+    line-height: 1.15;
     margin: 0 0 8px;
 }
 
 h1 {
-    font-size: 1.5rem;
+    font-size: clamp(30px, 5vw, 44px);
+    font-weight: 800;
+    letter-spacing: -0.035em;
 }
 
 h2 {
-    font-size: 1.15rem;
-    margin-top: 24px;
+    font-size: clamp(21px, 3vw, 26px);
+    font-weight: 750;
+    letter-spacing: -0.025em;
+    margin-top: 32px;
 }
 
 h3 {
-    font-size: 1rem;
+    font-size: 1.05rem;
+    letter-spacing: -0.015em;
 }
 
 p {
@@ -97,6 +125,12 @@ p {
 
 a {
     color: var(--accent);
+}
+
+.pg-grad {
+    background: var(--grad-text);
+    -webkit-background-clip: text;
+    background-clip: text;
 }
 
 .muted {
@@ -110,21 +144,22 @@ a {
 .card {
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 16px;
-    margin-bottom: 12px;
+    border-radius: var(--pg-radius-lg);
+    box-shadow: var(--pg-shadow);
+    padding: 20px;
+    margin-bottom: 14px;
 }
 
 .stack {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 10px;
 }
 
 .row {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: 10px;
     align-items: center;
 }
 
@@ -132,19 +167,20 @@ a {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
 }
 
 button,
 .button {
     appearance: none;
     border: 1px solid var(--border);
-    background: var(--surface-2);
+    background: var(--surface);
     color: var(--text);
-    border-radius: 10px;
-    padding: 10px 14px;
+    border-radius: var(--pg-radius-sm);
+    padding: 10px 16px;
     font: inherit;
     font-weight: 600;
+    line-height: 1.2;
     cursor: pointer;
     min-height: 44px;
     text-decoration: none;
@@ -152,12 +188,25 @@ button,
     align-items: center;
     justify-content: center;
     gap: 6px;
+    transition: border-color 0.2s, transform 0.2s, filter 0.2s, box-shadow 0.25s;
+}
+
+button:hover:not(:disabled),
+.button:hover {
+    border-color: var(--muted);
+    transform: translateY(-1px);
 }
 
 button.primary {
-    background: var(--accent);
-    border-color: var(--accent);
-    color: var(--accent-text);
+    border-color: transparent;
+    background: var(--pg-grad);
+    color: var(--pg-on-accent);
+    box-shadow: 0 10px 28px -12px color-mix(in srgb, #f2542d 75%, transparent);
+}
+
+button.primary:hover:not(:disabled) {
+    border-color: transparent;
+    filter: brightness(1.06);
 }
 
 button.danger {
@@ -171,6 +220,18 @@ button.link {
     min-height: 0;
     color: var(--accent);
     font-weight: 500;
+}
+
+button.link:hover:not(:disabled) {
+    transform: none;
+    opacity: 0.8;
+}
+
+/* Cartes cliquables : elles se soulèvent comme celles du playground. */
+button.card:hover:not(:disabled) {
+    transform: translateY(-4px);
+    box-shadow: var(--pg-shadow-hover);
+    border-color: color-mix(in srgb, var(--pg-accent) 40%, var(--border));
 }
 
 button:disabled {
@@ -197,17 +258,17 @@ textarea {
     color: var(--text);
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: var(--pg-radius-sm);
     padding: 10px 12px;
     min-height: 44px;
     width: 100%;
+    accent-color: #f2542d;
 }
 
 .badge {
     display: inline-block;
-    font-size: 0.75rem;
-    font-weight: 700;
-    padding: 2px 8px;
+    font: 500 0.72rem/1.6 var(--pg-mono);
+    padding: 2px 10px;
     border-radius: 999px;
     background: var(--surface-2);
     color: var(--muted);
@@ -236,34 +297,34 @@ textarea {
 
 .notice {
     border-radius: var(--radius);
-    padding: 12px 14px;
-    margin-bottom: 12px;
+    padding: 14px 16px;
+    margin-bottom: 14px;
     border: 1px solid transparent;
 }
 
 .notice.ok {
     background: var(--ok-bg);
-    border-color: var(--ok);
+    border-color: color-mix(in srgb, var(--ok) 35%, transparent);
 }
 
 .notice.info {
     background: var(--info-bg);
-    border-color: var(--info);
+    border-color: var(--border);
 }
 
 .notice.warning {
     background: var(--warning-bg);
-    border-color: var(--warning);
+    border-color: color-mix(in srgb, var(--warning) 35%, transparent);
 }
 
 .notice.danger {
     background: var(--danger-bg);
-    border-color: var(--danger);
+    border-color: color-mix(in srgb, var(--danger) 35%, transparent);
 }
 
 .code {
     font-family: var(--pg-mono);
-    font-weight: 700;
+    font-weight: 600;
 }
 
 .list {
@@ -283,25 +344,42 @@ textarea {
 
 .grid-2 {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-    gap: 8px;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 10px;
 }
 
 .stat {
-    background: var(--surface-2);
-    border-radius: 10px;
-    padding: 10px 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--pg-radius);
+    box-shadow: var(--pg-shadow);
+    padding: 14px 16px;
 }
 
 .stat .value {
-    font-size: 1.25rem;
-    font-weight: 700;
+    font-size: 1.5rem;
+    font-weight: 750;
+    letter-spacing: -0.02em;
     font-variant-numeric: tabular-nums;
 }
 
 .stat .label {
-    font-size: 0.8rem;
+    margin-top: 2px;
+    font: 12px/1.45 var(--pg-mono);
     color: var(--muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    button,
+    .button {
+        transition: none;
+    }
+
+    button:hover:not(:disabled),
+    .button:hover,
+    button.card:hover:not(:disabled) {
+        transform: none;
+    }
 }
 
 @media print {
@@ -309,12 +387,15 @@ textarea {
         display: none !important;
     }
 
-    body {
+    .pg-page {
+        min-height: 0;
         background: #fff;
         color: #000;
     }
 
-    .card {
+    .card,
+    .stat {
+        box-shadow: none;
         break-inside: avoid;
     }
 }
